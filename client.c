@@ -9,51 +9,59 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <stdio_ext.h>
+#include <stdio_ext.h>goto
+#include <ncurses.h>
+#include "ball.h"
+#include "paddle.h"
+#include "game_action.h"
 #include "process.h" 
+
+#define LEFT 0
+#define RIGHT 1
 
 // Handle Ctrl C
 void ctr_c_handler() {
     printf("\nGoodbye Hust!\n");
     exit(0);
 }
+Ball* ball;
+Paddle *left, *right;
+int paddleX, paddleY, ballX, ballY; // vi tri cua vot doi thu & vi tri bong
+char encoded[256];   // vi tri cua vot khi da encode
 
-// int paddleX, paddleY, ballX, ballY; // vi tri cua vot doi thu & vi tri bong
+void decode_client(char data[256]) {
+    char *tempX, *tempY, dataX[100], dataY[100], 
+        *tempX2, *tempY2, dataX2[100], dataY2[100], 
+        *tempX3, *tempY3, dataX3[100], dataY3[100], *ptr;
+    tempX = strtok(data, ";");
+    tempY = strtok(NULL, ";");
+    strcpy(dataX, tempX);
+    strcpy(dataY, tempY);
 
-// void decode_client(char data[256]) {
-//     char *tempX, *tempY, dataX[100], dataY[100], 
-//         *tempX2, *tempY2, dataX2[100], dataY2[100], 
-//         *tempX3, *tempY3, dataX3[100], dataY3[100], *ptr;
-//     tempX = strtok(data, ";");
-//     tempY = strtok(NULL, ";");
-//     strcpy(dataX, tempX);
-//     strcpy(dataY, tempY);
+    tempX2 = strtok(dataX, ",");
+    tempY2 = strtok(NULL, ",");
+    strcpy(dataX2, tempX2);
+    strcpy(dataY2, tempY2);
+    paddleX = strtol(dataX2, &ptr, 10);
+    paddleY = strtol(dataY2, &ptr, 10);
 
-//     tempX2 = strtok(dataX, ",");
-//     tempY2 = strtok(NULL, ",");
-//     strcpy(dataX2, tempX2);
-//     strcpy(dataY2, tempY2);
-//     paddleX = strtol(dataX2, &ptr, 10);
-//     paddleY = strtol(dataY2, &ptr, 10);
+    tempX3 = strtok(dataY, ",");
+    tempY3 = strtok(NULL, ",");
+    strcpy(dataX3, tempX3);
+    strcpy(dataY3, tempY3);
+    ballX = strtol(dataX3, &ptr, 10);
+    ballY = strtol(dataY3, &ptr, 10);
+}
 
-//     tempX3 = strtok(dataY, ",");
-//     tempY3 = strtok(NULL, ",");
-//     strcpy(dataX3, tempX3);
-//     strcpy(dataY3, tempY3);
-//     ballX = strtol(dataX3, &ptr, 10);
-//     ballY = strtol(dataY3, &ptr, 10);
-// }
 
-// char encoded[256];   // vi tri cua vot khi da encode
-
-// void encode_client(int c_x, int c_y) {       // c_x, c_y is position of paddles
-//     char client_x[100], client_y[100];
-//     sprintf(client_x, "%d", c_x);
-//     sprintf(client_y, "%d", c_y);
-//     strcpy(encoded, client_x);
-//     strcat(encoded, ",");
-//     strcat(encoded, client_y);
-// }
+void encode_client(int c_x, int c_y) {       // c_x, c_y is position of paddles
+    char client_x[100], client_y[100];
+    sprintf(client_x, "%d", c_x);
+    sprintf(client_y, "%d", c_y);
+    strcpy(encoded, client_x);
+    strcat(encoded, ",");
+    strcat(encoded, client_y);
+}
 
 
 int connectServer(int sockfd) {
