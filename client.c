@@ -155,7 +155,6 @@ int connectServer(int sockfd) {
                     case 1:
                         write(sockfd, choice, 2);
                         while(1) {
-                            printf("Please wait another player...\n");
                             printf("Press [S] to start game\n");
                             printf("Press [Q] to quit game!\n");
                             __fpurge(stdin);
@@ -175,7 +174,7 @@ int connectServer(int sockfd) {
                             } else if(strcmp(tmp2, "Quit") == 0){
                                 return 0;
                             } else {
-                                printf("\n");
+                                printf("Please wait another player...\n");
                             }
                         }
                         break;
