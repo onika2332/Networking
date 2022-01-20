@@ -10,13 +10,31 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include "process.h"
+#include "paddle.h"
+#include "ball.h"
+#include "game_action.h"
 
 #define PORT 5500
 #define MAX_PLAYERS 100
 #define UP_KEY 'W'
 #define DOWN_KEY 'W'
+#define ROWS 45
+#define COLS 110
+#define LEFT 0
+#define RIGHT 1
 
+struct clientInfo {
+    int clientfd; 
+    int rivalfd;
+    int ready;
+    int pos;
+};
+
+typedef struct clientInfo clientInfo;
 static _Atomic unsigned int cli_count = 0;
+Paddle *left, *right;
+Ball* ball;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 // static int uid = 10;
 
 // /* Client structure */
@@ -82,33 +100,33 @@ char *room;
 // 	pthread_mutex_unlock(&clients_mutex);
 // }
 
-// char *encode_server(int c_x, int c_y, int b_x, int b_y) {       // c_x, c_y is position of paddles, b_x, b_y is position of ball
-//     char client_x[100], client_y[100], ball_x[100], ball_y[100];
-//     sprintf(client_x, "%d", c_x);
-//     sprintf(client_y, "%d", c_y);
-//     sprintf(ball_x, "%d", b_x);
-//     sprintf(ball_y, "%d", b_y);
-//     char *result = client_x;
-//     strcat(result, ",");
-//     strcat(result, client_y);
-//     strcat(result, ";");
-//     strcat(result, ball_x);
-//     strcat(result, ",");
-//     strcat(result, ball_y);
-//     return result;
-// }
+char *encode_server(int c_x, int c_y, int b_x, int b_y) {       // c_x, c_y is position of paddles, b_x, b_y is position of ball
+    char client_x[100], client_y[100], ball_x[100], ball_y[100];
+    sprintf(client_x, "%d", c_x);
+    sprintf(client_y, "%d", c_y);
+    sprintf(ball_x, "%d", b_x);
+    sprintf(ball_y, "%d", b_y);
+    char *result = client_x;
+    strcat(result, ",");
+    strcat(result, client_y);
+    strcat(result, ";");
+    strcat(result, ball_x);
+    strcat(result, ",");
+    strcat(result, ball_y);
+    return result;
+}
 
-// int clientX, clientY; // vi tri paddle cua client 
+int clientX, clientY; // vi tri paddle cua client 
 
-// void decode_server(char data[256]) { 
-//     char *tempX, *tempY, dataX[100], dataY[100], *ptr;
-//     tempX = strtok(data, ",");
-//     tempY = strtok(NULL, ",");
-//     strcpy(dataX, tempX);
-//     strcpy(dataY, tempY);
-//     clientX = strtol(dataX, &ptr, 10);
-//     clientY = strtol(dataY, &ptr, 10);
-// }
+void decode_server(char data[256]) { 
+    char *tempX, *tempY, dataX[100], dataY[100], *ptr;
+    tempX = strtok(data, ",");
+    tempY = strtok(NULL, ",");
+    strcpy(dataX, tempX);
+    strcpy(dataY, tempY);
+    clientX = strtol(dataX, &ptr, 10);
+    clientY = strtol(dataY, &ptr, 10);
+}
 
 void* client_handler(void* arg) {
     // Read data from file
@@ -131,7 +149,7 @@ void* client_handler(void* arg) {
     fclose(fp);
     // end read FILE
     cli_count++;
-    int clientfd = (intptr_t) arg;
+    clientInfo* client = (clientInfo*)arg;
     pthread_detach(pthread_self());
     char check[50];
     char username[256];
@@ -140,17 +158,17 @@ void* client_handler(void* arg) {
     bzero(&recv_data, 12);
 
     while(1) {
-        int data = read(clientfd, &recv_data, 2);
+        int data = read(client->clientfd, &recv_data, 2);
         if(data == 0) break;
         recv_data[data] = '\0';
-        printf("Received from client in share-socket %d: %s\n", clientfd, recv_data);
+        printf("Received from client in share-socket %d: %s\n", client->clientfd, recv_data);
         if(strlen(recv_data) == 0){
             break;
         }
         // Register handle
         if(strcmp(recv_data, "1") == 0){
-            printf("Received from client in share-socket %d: Register\n", clientfd);
-            data = read(clientfd, &username, 256);
+            printf("Received from client in share-socket %d: Register\n", client->clientfd);
+            data = read(client->clientfd, &username, 256);
             if(data == 0){
                 exit(0);
             }
@@ -159,26 +177,26 @@ void* client_handler(void* arg) {
                 username[strlen(username) - 1] = 0;
             node checkAcc = findExistAccount(head, username);
             if(checkAcc != NULL) {
-                write(clientfd, "NotOK", 6);
+                write(client->clientfd, "NotOK", 6);
             } else {
-                write(clientfd, "OK", 3);
-                data = read(clientfd, &password, 256);
+                write(client->clientfd, "OK", 3);
+                data = read(client->clientfd, &password, 256);
                 if(data == 0){
                     break;
                 }
                 password[data] = '\0';
                 if (password[strlen(password) - 1] == '\n')
                     password[strlen(password) - 1] = 0;
-                printf("Receive username from client in share-socket %d: %s\n", clientfd, username);
-                printf("Receive password from client in share-socket %d: %s\n", clientfd, password);
+                printf("Receive username from client in share-socket %d: %s\n", client->clientfd, username);
+                printf("Receive password from client in share-socket %d: %s\n", client->clientfd, password);
                 addTail(head, username, password, 1);
                 printFile(head);
             }
 
         } else if(strcmp(recv_data, "2") == 0) {    // Login handle
-            printf("Received from client in share-socket %d: Login\n", clientfd);
+            printf("Received from client in share-socket %d: Login\n", client->clientfd);
             
-            data = read(clientfd, &username, 256);
+            data = read(client->clientfd, &username, 256);
             if(data == 0){
                 exit(0);
             }
@@ -187,21 +205,21 @@ void* client_handler(void* arg) {
                 username[strlen(username) - 1] = 0;
             node checkAcc = findExistAccount(head, username);
             if(checkAcc == NULL || checkAcc->status == 0) {
-                write(clientfd, "NotOK", 6);
+                write(client->clientfd, "NotOK", 6);
             } else {
-                write(clientfd, "OK", 3);
-                data = read(clientfd, &password, 256);
+                write(client->clientfd, "OK", 3);
+                data = read(client->clientfd, &password, 256);
                 if(data == 0){
                     break;
                 }
                 password[data] = '\0';
                 if (password[strlen(password) - 1] == '\n')
                     password[strlen(password) - 1] = 0;
-                printf("Receive username from client in share-socket %d: %s\n", clientfd, username);
-                printf("Receive password from client in share-socket %d: %s\n", clientfd, password);
+                printf("Receive username from client in share-socket %d: %s\n", client->clientfd, username);
+                printf("Receive password from client in share-socket %d: %s\n", client->clientfd, password);
                 while(strcmp(checkAcc->password, password) != 0){
-                    write(clientfd, "Password not correct!", 21);
-                    data = read(clientfd, &password, 256);
+                    write(client->clientfd, "Password not correct!", 21);
+                    data = read(client->clientfd, &password, 256);
                     if(data == 0){
                         break;
                     }
@@ -209,43 +227,41 @@ void* client_handler(void* arg) {
                     if (password[strlen(password) - 1] == '\n')
                     password[strlen(password) - 1] = 0;
                 }
-                write(clientfd, "CorrectPass", 12);
+                write(client->clientfd, "CorrectPass", 12);
                 back:
                 fflush(stdin);
-                data = read(clientfd, &recv_data, 2);
+                data = read(client->clientfd, &recv_data, 2);
                 if(data == 0){
                     break;
                 }
                 recv_data[data] = '\0';
                 if(strcmp(recv_data, "1") == 0){    // Waiting room
                     while(1) {
-                        data = read(clientfd, &check, 50);
+                        data = read(client->clientfd, &check, 50);
                         if(data == 0) {
                             break;
                         }
                         check[data] = '\0';
-                        switch(check[0]) {
-                            case 's':
-                            case 'S':
-                                if(cli_count == 2) {
-                                    write(clientfd, "Play", 5);
-                                } else {
-                                    write(clientfd, "Waiting", 8);
-                                }
-                                break;
-                            case 'q':
-                            case 'Q':
-                                write(clientfd, "Quit", 5);
-                                break;
-                            default: 
-                                break;
-                        }
+                        // if((strcmp(check, "S") == 0) || (strcmp(check, "s") == 0)) {
+                        //     if(cli_count == 2) {
+                        //         write(client->clientfd, "Play", 5);
+                        //         break;
+                        //     } else {
+                        //         write(client->clientfd, "Waiting", 8);
+                        //     }
+                        // } else if ((strcmp(check, "Q") == 0) || (strcmp(check, "q") == 0)) {
+                        //     write(client->clientfd, "Quit", 8);
+                        //     break;
+                        // }
+                        char response[256];
+                        itoa_simple(response, cli_count);
+                        write(client->clientfd, response, 256);
                     }
                     break;
                 } else if(strcmp(recv_data, "2") == 0){ // Change password
-                    printf("Received from client in share-socket %d: Change password\n", clientfd);
+                    printf("Received from client in share-socket %d: Change password\n", client->clientfd);
                     char new[256];
-                    data = read(clientfd, &new, 256);
+                    data = read(client->clientfd, &new, 256);
                     if(data == 0) {
                         break;
                     }
@@ -256,14 +272,59 @@ void* client_handler(void* arg) {
                     printFile(head);
                     goto back;
                 } else if(strcmp(recv_data, "3") == 0){ // Quit
-                    printf("Received from client in share-socket %d: Quit game\n", clientfd);
+                    printf("Received from client in share-socket %d: Quit game\n", client->clientfd);
                     break;
+                // } else if(strcmp(recv_data, "4") == 0) { // ready to play game
+                //     client->ready = 1; // beegin to play
+                // }
+                } else {
+                    client->ready = 1; // beegin to play
                 }
             }
         }
     }
 }
+void *listen_client(void *args){
+	        char recv_data[256];
+            bzero(&recv_data, 12);
+            if(pthread_detach(pthread_self())) {
+		        printf("pthread_detach error\n");
+	        }
+            clientInfo* client = (clientInfo*)args;
+            int data = read(client->clientfd, &recv_data, 2);
+            if(data != 0) { 
+                recv_data[data] = '\0';
+                if(strlen(recv_data) > 0) {
+                    
+                    pthread_mutex_lock(&mutex);
+                    decode_server(recv_data);
+                    if( client->pos == LEFT ) {
+                        left->center->x = clientX;
+                        left->center->y = clientY;
+                        char* send_data = encode_server(
+                            left->center->x, 
+                            left->center->y, 
+                            ball->center->x, 
+                            ball->center->y);
+                        write(client->rivalfd, &send_data, strlen(send_data));
+                    } else {
+                        right->center->x = clientX;
+                        right->center->y = clientY;
+                        char* send_data = encode_server(
+                            left->center->x, 
+                            left->center->y, 
+                            ball->center->x, 
+                            ball->center->y);
+                        write(client->rivalfd, &send_data, strlen(send_data));
+                    }
+                    
+                    pthread_mutex_unlock(&mutex);
+                }
+                // mutex-lock ball and 2 paddle to update and send back
 
+            }
+	        pthread_exit(NULL);
+        }
 // Handle Ctrl C
 void ctr_c_handler() {
     printf("\nExit Server!\n");
@@ -271,7 +332,7 @@ void ctr_c_handler() {
 }
 
 int main(int argc, char *argv[]) {
-
+    
     int socket_fds[MAX_PLAYERS];     
     struct sockaddr_in socket_addr[MAX_PLAYERS];
     int i;
@@ -310,21 +371,79 @@ int main(int argc, char *argv[]) {
     }
 
     socklen_t len = sizeof(socket_addr[0]);
-
+    clientInfo client[2];
     while(1) {
         for(i = 1;; i++){
             socket_fds[i] = accept(socket_fds[0], (struct sockaddr *) &socket_addr[i], &len);
             if (socket_fds[i] < 0) 
                 perror("ERROR on accept");
             if(i < 3) { // create thread to handle client request
+                // i = 1 -> left paddle, i = 2 --> right paddle
+                client[i-1].clientfd = socket_fds[i];
+                client[i-1].rivalfd = socket_fds[3-i];
                 pthread_t tid;
-                pthread_create(&tid, NULL, &client_handler, (void *)(intptr_t)socket_fds[i]);
+                int res = pthread_create(&tid, NULL, &client_handler, (void *)&client[i-1]);
+                if( res != 0 ) {
+                    perror("Thread created failure");
+                    exit(EXIT_FAILURE);
+                }
+                if( client[i-1].ready == 1) {
+                    if( i == 1) {
+                        client->pos = LEFT;
+                        write(socket_fds[i], "left", 4);
+                    } else if( i == 2 ) {
+                        client->pos = RIGHT;
+                        write(socket_fds[i], "right", 5);
+                    }
+                }
+                
             } else {    // if more than 2 clients have access => reject
                 close(socket_fds[i]);
                 continue;
             }
         }
-        close(socket_fds[0]);  
+        //close(socket_fds[0]);  
+    }
+
+game_setup:
+    left = setPaddle(1, ROWS/2, 2); // left paddle
+    right = setPaddle( COLS - 2, ROWS/2, 2); // right paddle
+    ball = setBall( COLS/2, ROWS/2, 2, 2); // ball
+    int randomX = 2 + rand() % (4 + 1 - 1); // X : 2, 3, 4, 5
+    int randomY = 2;
+    ball->plus_x = ball->plus_x > 0 ? randomX : -1*randomX;
+    ball->plus_y = ball->plus_y > 0 ? randomY : -1*randomY;
+    ball->center->x = COLS/2;
+    ball->center->y = ROWS/2;
+    while(1) { // loop to listen client keypress
+        pthread_t tid1, tid2;
+        int res = pthread_create(&tid1, NULL, &listen_client, (void *)&client[0]);
+        if( res != 0 ) {
+            perror("Thread created failure");
+            exit(EXIT_FAILURE);
+        }
+
+        res = pthread_create(&tid2, NULL, &listen_client, (void *)&client[1]);
+        if( res != 0 ) {
+            perror("Thread created failure");
+            exit(EXIT_FAILURE);
+        }
+        updatePosition(ball);
+        // checking the conflict
+        if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
+            //conflict with paddle
+            ball->plus_x = -1 * ball->plus_x;
+        } else if( checkConflictWithWindow(ball, COLS, ROWS) ) {
+            // conflict with window
+            ball->plus_y = -1 * ball->plus_y;
+        }
+
+        // restart position
+        if( ball->center->x > COLS - 2 || ball->center->x < 1 ) {
+            goto game_setup;
+        }
+        // loop cycle - 0.5s
+        usleep(500000);
     }
     return 0;
 }

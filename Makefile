@@ -8,7 +8,7 @@ server: server.o
 	${CC} server.o -o server -pthread
 
 client: client.o
-	${CC} client.o -o client -pthread
+	${CC} client.o -o client -pthread -lncurses
 
 server.o: server.c
 	${CC} ${CFLAGS} server.c
