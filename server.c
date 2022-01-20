@@ -12,7 +12,7 @@
 #include "process.h"
 #include "paddle.h"
 #include "ball.h"
-#include <ncurses.h>
+#include "game_action.h"
 
 #define PORT 5500
 #define MAX_PLAYERS 100
@@ -274,7 +274,10 @@ void* client_handler(void* arg) {
                 } else if(strcmp(recv_data, "3") == 0){ // Quit
                     printf("Received from client in share-socket %d: Quit game\n", client->clientfd);
                     break;
-                } else if(strcmp(recv_data, "4") == 0) { // ready to play game
+                // } else if(strcmp(recv_data, "4") == 0) { // ready to play game
+                //     client->ready = 1; // beegin to play
+                // }
+                } else {
                     client->ready = 1; // beegin to play
                 }
             }
@@ -303,7 +306,7 @@ void *listen_client(void *args){
                             left->center->y, 
                             ball->center->x, 
                             ball->center->y);
-                        write(client->rivalfd, send_data, strlen(send_data));
+                        write(client->rivalfd, &send_data, strlen(send_data));
                     } else {
                         right->center->x = clientX;
                         right->center->y = clientY;
@@ -312,7 +315,7 @@ void *listen_client(void *args){
                             left->center->y, 
                             ball->center->x, 
                             ball->center->y);
-                        write(client->rivalfd, send_data, strlen(send_data));
+                        write(client->rivalfd, &send_data, strlen(send_data));
                     }
                     
                     pthread_mutex_unlock(&mutex);
@@ -384,11 +387,13 @@ int main(int argc, char *argv[]) {
                     perror("Thread created failure");
                     exit(EXIT_FAILURE);
                 }
-                if( client->ready == 1) {
+                if( client[i-1].ready == 1) {
                     if( i == 1) {
                         client->pos = LEFT;
+                        write(socket_fds[i], "left", 4);
                     } else if( i == 2 ) {
                         client->pos = RIGHT;
+                        write(socket_fds[i], "right", 5);
                     }
                 }
                 
@@ -397,7 +402,7 @@ int main(int argc, char *argv[]) {
                 continue;
             }
         }
-        close(socket_fds[0]);  
+        //close(socket_fds[0]);  
     }
 
 game_setup:
@@ -438,7 +443,7 @@ game_setup:
             goto game_setup;
         }
         // loop cycle - 0.5s
-        usleep(5000);
+        usleep(500000);
     }
     return 0;
 }

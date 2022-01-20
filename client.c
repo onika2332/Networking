@@ -9,7 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <stdio_ext.h>goto
+#include <stdio_ext.h>
 #include <ncurses.h>
 #include "ball.h"
 #include "paddle.h"
@@ -18,6 +18,8 @@
 
 #define LEFT 0
 #define RIGHT 1
+#define ROWS 45
+#define COLS 110
 
 // Handle Ctrl C
 void ctr_c_handler() {
@@ -28,6 +30,7 @@ Ball* ball;
 Paddle *left, *right;
 int paddleX, paddleY, ballX, ballY; // vi tri cua vot doi thu & vi tri bong
 char encoded[256];   // vi tri cua vot khi da encode
+int pos; // LEFT player or RIGHT player
 
 void decode_client(char data[256]) {
     char *tempX, *tempY, dataX[100], dataY[100], 
@@ -179,6 +182,7 @@ int connectServer(int sockfd) {
                             }
                             tmp2[data] = '\0';
                             if(strcmp(tmp2, "Play") == 0) {
+                                // set pos is LEFT or RIGHT
                                 return 1;
                             } else if(strcmp(tmp2, "Quit") == 0){
                                 return 0;
@@ -221,6 +225,15 @@ int connectServer(int sockfd) {
 }
 
 int main(int argc, char *argv[]) {
+    ///// set draw screen mode
+    initscr(); // init draw mode
+    cbreak(); // input mode
+    noecho(); // no reply to screen
+    WINDOW* customWin = newwin(45, 110, 0, 0);
+    keypad(customWin, TRUE); // allow press special key like arrow key
+    curs_set(0); // disappear cursor in screen
+    ///////////////////////////////////
+
     int sock = 0;
     struct sockaddr_in servaddr;
     char *SERV_ADDR = argv[1];
@@ -273,6 +286,96 @@ int main(int argc, char *argv[]) {
     sleep(1);
     printf("Game will start after: 1 seconds\n");
     sleep(1);
-
+game_play:
+    left = setPaddle(1, ROWS/2, 2); // left paddle
+    right = setPaddle( COLS - 2, ROWS/2, 2); // right paddle
+    ball = setBall( COLS/2, ROWS/2, 2, 2); // ball
+    if(pos == LEFT) {
+        paddleX = COLS-2;
+        paddleY = ROWS/2;
+    } else {
+        paddleX = 1;
+        paddleY = ROWS/2;
+    }
+    ballX = COLS/2;
+    ballY = COLS/2;
+    char income[BUFF_SIZE]; // data income from server : paddle + ball
+    while(1) {
+        wclear(customWin); // clear old screen to draw the new ones
+        box(customWin, '|', '='); // draw game board
+        if(pos == LEFT) {
+            // draw left paddle
+            for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
+                mvwaddch(customWin, i, 1, 'H');
+            }
+            for( int i = 0; i < 4; i++) {
+                int ch;
+                if ((ch = wgetch(customWin)) != ERR) {
+                    if( ch == KEY_UP ) {
+                        displace(left, -2, ROWS);
+                        // create thread --> enemy
+                    } else if( ch == KEY_DOWN ) {
+                        displace(left, 2, ROWS);
+                    }
+                encode_client(left->center->x, left->center->y);
+                write(sock, encoded, sizeof(encoded));
+                }
+                usleep(50000); // sleep 50ms
+            }
+            
+            int data = read(sock, income, sizeof(income));
+            if( data == 0) {
+                break;
+            } else {
+                income[data] = '\0';
+                decode_client(income);
+            }
+            right->center->x = paddleX;
+            right->center->y = paddleY;
+            ball->center->x = ballX;
+            ball->center->y = ballY;
+            for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
+                mvwaddch(customWin, i, COLS - 2, 'H');
+            }
+        } else {
+            // draw right paddle
+            for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
+                mvwaddch(customWin, i, COLS - 2, 'H');
+            }
+            for( int i = 0; i <  4; i++ ) {
+                int ch;
+                if ((ch = wgetch(customWin)) != ERR) {
+                    if( ch == KEY_UP ) {
+                        displace(right, -2, ROWS);
+                    } else if( ch == KEY_DOWN ) {
+                        displace(right, 2, ROWS);
+                    }
+                    encode_client(right->center->x, right->center->y);
+                    write(sock, encoded, sizeof(encoded));
+                }
+                usleep(50000);// sleep 50ms
+            }
+            int data = read(sock, income, sizeof(income));
+            if( data == 0) {
+                break;
+            } else {
+                income[data] = '\0';
+                decode_client(income);
+            }
+            
+            left->center->x = paddleX;
+            left->center->y = paddleY;
+            ball->center->x = ballX;
+            ball->center->y = ballY;
+            for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
+                mvwaddch(customWin, i, 1, 'H');
+            }
+        }
+        // draw ball
+        mvwaddch(customWin, ball->center->y, ball->center->x, 'O');
+        // update screen with new draw 
+        wrefresh(customWin);
+        usleep(200000);
+    }
     return 0;
 }
