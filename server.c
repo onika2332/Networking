@@ -242,20 +242,22 @@ void* client_handler(void* arg) {
                             break;
                         }
                         check[data] = '\0';
-                        // if((strcmp(check, "S") == 0) || (strcmp(check, "s") == 0)) {
-                        //     if(cli_count == 2) {
-                        //         write(client->clientfd, "Play", 5);
-                        //         break;
-                        //     } else {
-                        //         write(client->clientfd, "Waiting", 8);
-                        //     }
-                        // } else if ((strcmp(check, "Q") == 0) || (strcmp(check, "q") == 0)) {
-                        //     write(client->clientfd, "Quit", 8);
-                        //     break;
-                        // }
-                        char response[256];
-                        itoa_simple(response, cli_count);
-                        write(client->clientfd, response, 256);
+                        switch(check[0]) {
+                            case 's':
+                            case 'S':
+                                if(cli_count == 2) {
+                                    write(client->clientfd, "Play", 5);
+                                } else {
+                                    write(client->clientfd, "Waiting", 8);
+                                }
+                                break;
+                            case 'q':
+                            case 'Q':
+                                write(client->clientfd, "Quit", 8);
+                                break;
+                            default:
+                                break;
+                        }
                     }
                     break;
                 } else if(strcmp(recv_data, "2") == 0){ // Change password

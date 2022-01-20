@@ -181,7 +181,6 @@ int connectServer(int sockfd) {
                             }
                             tmp2[data] = '\0';
                             if(strcmp(tmp2, "Play") == 0) {
-                                // set pos is LEFT or RIGHT
                                 return 1;
                             } else if(strcmp(tmp2, "Quit") == 0){
                                 return 0;
@@ -224,15 +223,6 @@ int connectServer(int sockfd) {
 }
 
 int main(int argc, char *argv[]) {
-    ///// set draw screen mode
-    initscr(); // init draw mode
-    cbreak(); // input mode
-    noecho(); // no reply to screen
-    WINDOW* customWin = newwin(45, 110, 0, 0);
-    keypad(customWin, TRUE); // allow press special key like arrow key
-    curs_set(0); // disappear cursor in screen
-    ///////////////////////////////////
-
     int sock = 0;
     struct sockaddr_in servaddr;
     char *SERV_ADDR = argv[1];
@@ -285,6 +275,16 @@ int main(int argc, char *argv[]) {
     sleep(1);
     printf("Game will start after: 1 seconds\n");
     sleep(1);
+
+    ///// set draw screen mode
+    initscr(); // init draw mode
+    cbreak(); // input mode
+    noecho(); // no reply to screen
+    WINDOW* customWin = newwin(45, 110, 0, 0);
+    keypad(customWin, TRUE); // allow press special key like arrow key
+    curs_set(0); // disappear cursor in screen
+    ///////////////////////////////////
+
 game_play:
     left = setPaddle(1, ROWS/2, 2); // left paddle
     right = setPaddle( COLS - 2, ROWS/2, 2); // right paddle
