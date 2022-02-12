@@ -30,6 +30,8 @@ struct clientInfo {
     int pos;
 };
 
+// char host[256];
+
 typedef struct clientInfo clientInfo;
 static _Atomic unsigned int cli_count = 0;
 Paddle *left, *right;
@@ -50,7 +52,7 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 // pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 extern node head;
-char *room;
+char room[BUFF_SIZE];
 
 /* Add clients to queue */
 // void queue_add(client_t *cl){
@@ -235,8 +237,22 @@ void* client_handler(void* arg) {
                     break;
                 }
                 recv_data[data] = '\0';
+                printf("%s", recv_data);
+                int t = 1;
                 if(strcmp(recv_data, "1") == 0){    // Waiting room
+                    switch(t) {
+                        case 1: 
+                            if(strcmp(room, "") == 0) {
+                                strcpy(room, username);
+                            }
+                            printf("Host: %s", room);
+                            write(client->clientfd, room, 256);
+                            break;
+                        default:
+                            break;
+                    }
                     while(1) {
+                        printf("Loop");
                         data = read(client->clientfd, &check, 50);
                         if(data == 0) {
                             break;
@@ -253,7 +269,7 @@ void* client_handler(void* arg) {
                                 break;
                             case 'q':
                             case 'Q':
-                                write(client->clientfd, "Quit", 8);
+                                write(client->clientfd, "Quit", 5);
                                 break;
                             default:
                                 break;
@@ -276,9 +292,6 @@ void* client_handler(void* arg) {
                 } else if(strcmp(recv_data, "3") == 0){ // Quit
                     printf("Received from client in share-socket %d: Quit game\n", client->clientfd);
                     break;
-                // } else if(strcmp(recv_data, "4") == 0) { // ready to play game
-                //     client->ready = 1; // beegin to play
-                // }
                 } else {
                     client->ready = 1; // beegin to play
                 }

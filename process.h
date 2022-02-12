@@ -159,3 +159,10 @@ char *itoa_simple(char *dest, int i) {
   *itoa_simple_helper(s, i) = '\0';
   return dest;
 }
+
+int checkHost(char host[256], char user[256]) {
+    if(strcmp(host, user) == 0) {
+        return 1;
+    }
+    return 0;
+}

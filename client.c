@@ -68,7 +68,7 @@ void encode_client(int c_x, int c_y) {       // c_x, c_y is position of paddles
 
 
 int connectServer(int sockfd) {
-    char test[BUFF_SIZE];
+    char test[BUFF_SIZE], host[BUFF_SIZE];
     char choice[2];
     char username[BUFF_SIZE];
     char password[BUFF_SIZE];
@@ -160,26 +160,86 @@ int connectServer(int sockfd) {
                     __fpurge(stdin);
                     fgets(choice,sizeof(choice), stdin);
                 }
-                int check2 = choice[0] - '0';
+                int check2 = choice[0] - '0', receiveHost, t = 1, isHost;
                 char new_password[BUFF_SIZE], choose[BUFF_SIZE];
+                write(sockfd, choice, 2);
                 switch(check2) {
                     case 1:
-                        write(sockfd, choice, 2);
+                        switch(t) {
+                            case 1:
+                                receiveHost = read(sockfd, &host, BUFF_SIZE);
+                                if(receiveHost == 0) {
+                                    break;
+                                }
+                                host[receiveHost] = '\0';
+                                printf("Host: %s\n", host);
+                                if(strcmp(host, username) == 0) {
+                                    isHost = 1;
+                                } else {
+                                    isHost = 0;
+                                }
+                                printf("isHost: %d\n", isHost);
+                                break;
+                            default:
+                                break;
+                        }
                         while(1) {
-                            printf("Press [S] to start game\n");
-                            printf("Press [Q] to quit game!\n");
-                            __fpurge(stdin);
-                            fgets(choose, sizeof(choose), stdin);
-                            if((strcmp(choose, "Q") == 0) || (strcmp(choose, "q") == 0)) {
-                                printf("Bye!");
-                                exit(0);
+                            printf("Loop");
+                            switch(isHost) {
+                                case 1: 
+                                    printf("Press [S] to start game\n");
+                                    printf("Press [Q] to quit game!\n");
+                                    __fpurge(stdin);
+                                    fgets(choose, sizeof(choose), stdin);
+                                    if((strcmp(choose, "Q") == 0) || (strcmp(choose, "q") == 0)) {
+                                        printf("Bye!");
+                                        exit(0);
+                                    }
+                                    write(sockfd, choose, 2);
+                                    break;
+                                case 0:
+                                    __fpurge(stdin);
+                                    fgets(choose, sizeof(choose), stdin);
+                                    if((strcmp(choose, "Q") == 0) || (strcmp(choose, "q") == 0)) {
+                                        printf("Bye!");
+                                        exit(0);
+                                    }
+                                    write(sockfd, "w", 2);
+                                    break;
+                                default:
+                                    break;
+
                             }
-                            write(sockfd, choose, 2);
+                            // if(isHost == 1) {
+                            //     printf("Press [S] to start game\n");
+                            //     printf("Press [Q] to quit game!\n");
+                            //     __fpurge(stdin);
+                            //     fgets(choose, sizeof(choose), stdin);
+                            //     if((strcmp(choose, "Q") == 0) || (strcmp(choose, "q") == 0)) {
+                            //         printf("Bye!");
+                            //         exit(0);
+                            //     }
+                            //     write(sockfd, choose, 2);
+                            // } else {
+                            //     __fpurge(stdin);
+                            //     fgets(choose, sizeof(choose), stdin);
+                            //     if((strcmp(choose, "Q") == 0) || (strcmp(choose, "q") == 0)) {
+                            //         printf("Bye!");
+                            //         exit(0);
+                            //     }
+                            //     write(sockfd, "w", 2);
+                            // }
+                            // if(isHost == 1) {
+                            //     write(sockfd, choose, 2);
+                            // } else if(isHost == 0) {
+                            //     write(sockfd, "w", 2);
+                            // }
                             int data = read(sockfd, &tmp2, BUFF_SIZE);
                             if(data == 0) {
                                 break;
                             }
                             tmp2[data] = '\0';
+                            printf("From server: %s", tmp2);
                             if(strcmp(tmp2, "Play") == 0) {
                                 return 1;
                             } else if(strcmp(tmp2, "Quit") == 0){
@@ -190,7 +250,6 @@ int connectServer(int sockfd) {
                         }
                         break;
                     case 2:
-                        write(sockfd, choice, 2);
                         printf("New password: ");
                         __fpurge(stdin);
                         fgets(new_password, sizeof(new_password), stdin);
@@ -206,10 +265,7 @@ int connectServer(int sockfd) {
                         break;
                     case 3:
                         signup = 0;
-                        write(sockfd, choice, 2);
-                        return 0;
-                        write(sockfd, choice, 2);                      
-                        goto back;
+                        exit(0);
                         break;
                     default:
                         break;
