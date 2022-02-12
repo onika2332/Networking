@@ -15,14 +15,13 @@
 #include "game_action.h"
 
 
-
+#define DEFAULT_KEY 'n'
 #define PORT                5500
 #define MAX_PLAYERS         100
 #define HEIGHT              24
 #define WIDTH               80
 #define MAX_SNAKE_LENGTH    HEIGHT * WIDTH
 #define WINNER_LENGTH       10
-#define FRUIT               -111
 #define WALL                -1111
 #define WALL2               -1112
 #define BORDER              -99
@@ -31,14 +30,12 @@
 #define DOWN_KEY            'S'
 #define LEFT_KEY            'A'
 #define RIGHT_KEY           'D'
-
-//Game map
-int             game_map[HEIGHT+10][WIDTH+10];
-int             map_size = (HEIGHT+10) * (WIDTH+10) * sizeof(game_map[0][0]);
-pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;   
+ 
 int             someone_won = 0;
 int check_run = 0;
 
+
+int client[2];
 char *room;
 int start = 0;
 int t1 = 5;
@@ -50,208 +47,8 @@ int number_players = 0;
 typedef enum{
     UP    = UP_KEY, 
     DOWN  = DOWN_KEY, 
-    LEFT  = LEFT_KEY, 
-    RIGHT = RIGHT_KEY
 } direction;
 
-//Coordinate structure, these are the building blocks for snakes
-typedef struct{
-    int x, y;
-    direction d;
-} coordinate;
-
-//Snake structure, each part is made up of coordinate 
-typedef struct{
-    int player_no, length;
-    coordinate head;
-    coordinate body_segment[MAX_SNAKE_LENGTH - 2];
-    coordinate tail;
-} snake;
-
-//Function to create a snake
-snake* make_snake(int player_no, int head_y, int head_x){
-    
-    //Place the snake on the map (matrix)
-    pthread_mutex_lock(&map_lock);
-    game_map[head_y][head_x]   = -player_no;
-    game_map[head_y+1][head_x] = 
-    game_map[head_y+2][head_x] = player_no;
-    pthread_mutex_unlock(&map_lock);    
-    
-    //Create snake struct, set coordinates facing up
-    snake* s = malloc(sizeof(snake));
-    
-    s->player_no = player_no;
-    s->length = 3;
-
-    s->head.y = head_y;
-    s->head.x = head_x;
-    s->head.d = UP;
-
-    s->body_segment[0].y = head_y + 1;
-    s->body_segment[0].x = head_x;
-    s->body_segment[0].d = UP;
-
-    s->tail.y = head_y + 2;
-    s->tail.x = head_x;
-    s->tail.d = UP;
-
-    return s;
-}
-
-//Function to kill snake and free memory
-void kill_snake(snake* s){
-
-    //Set all snake coordinates to zero on map
-    pthread_mutex_lock(&map_lock);
-    game_map[s->head.y][s->head.x] = game_map[s->tail.y][s->tail.x] = 0;    
-    int i;
-    for(i = 0; i < s->length - 2; i++)
-        game_map[s->body_segment[i].y][s->body_segment[i].x] = 0;
-    pthread_mutex_unlock(&map_lock);
-
-    //Free memory
-    free(s);    
-    s = NULL;
-}
-
-//Function to move snake
-void move_snake(snake* s, direction d){
-    memmove(&(s->body_segment[1]), 
-            &(s->body_segment[0]), 
-            (s->length-2) * sizeof(coordinate));
-    s->body_segment[0].y = s->head.y;
-    s->body_segment[0].x = s->head.x; 
-    s->body_segment[0].d = s->head.d;
-    switch(d){
-        case UP:{
-            s->head.y = s->head.y-1;
-            s->head.d = UP;            
-            break;
-        }
-        case DOWN:{
-            s->head.y = s->head.y+1;
-            s->head.d = DOWN;  
-            break;
-        }
-        case LEFT:{
-            s->head.x = s->head.x-1;
-            s->head.d = LEFT;  
-            break;
-        }
-        case RIGHT:{
-            s->head.x = s->head.x+1;
-            s->head.d = RIGHT;  
-            break;
-        }
-        default: break;
-    }
-    pthread_mutex_lock(&map_lock);
-    game_map[s->head.y][s->head.x] = -(s->player_no);
-    game_map[s->body_segment[0].y][s->body_segment[0].x] = s->player_no;
-    game_map[s->tail.y][s->tail.x] = 0;
-    pthread_mutex_unlock(&map_lock);
-
-    s->tail.y = s->body_segment[s->length-2].y;
-    s->tail.x = s->body_segment[s->length-2].x;
-}
-
-//Function to randomly add a fruit to the game map
-void add_fruit(){
-    int x, y;
-    do{
-        y = rand() % (HEIGHT - 6) + 3;
-        x = rand() % (WIDTH - 6) + 3;
-    } while (game_map[y][x] != 0);
-    pthread_mutex_lock(&map_lock);
-    game_map[y][x] = FRUIT;
-    pthread_mutex_unlock(&map_lock);
-}
-void add_wall(){
-    int x, y, a;
-    do{
-        y = rand() % (HEIGHT - 6) + 3;
-        x = rand() % (WIDTH - 6) + 3;
-    } while (game_map[y][x] != 0);
-    pthread_mutex_lock(&map_lock);
-    a = rand()%10;
-    while(a+y >= HEIGHT || a < 3){
-        a = rand()%10;
-    }
-    for(int i = 0; i < a; i++){
-        if(game_map[y+i][x] == 0)
-            game_map[y+i][x] = WALL;
-    }
-    pthread_mutex_unlock(&map_lock);
-}
-
-void add_wall2(){
-    int x, y, a;
-    do{
-        y = rand() % (HEIGHT - 6) + 3;
-        x = rand() % (WIDTH - 6) + 3;
-    } while (game_map[y][x] != 0);
-    pthread_mutex_lock(&map_lock);
-    a = rand()%10;
-    while(a+x >= WIDTH || a < 3){
-        a = rand()%10;
-    }
-    for(int i = 0; i < a; i++){
-        if(game_map[y][x+i] == 0)
-            game_map[y][x+i] = WALL2;
-    }
-    pthread_mutex_unlock(&map_lock);
-} 
-
-//Function for a snake to eat a fruit in front of it
-void eat_fruit(snake* s, direction d, int player_no){
-    memmove(&(s->body_segment[1]), 
-            &(s->body_segment[0]), 
-            (s->length-2) * sizeof(coordinate));
-    s->body_segment[0].y = s->head.y;
-    s->body_segment[0].x = s->head.x; 
-    s->body_segment[0].d = s->head.d;
-    switch(d){
-        case UP:{
-            s->head.y = s->head.y-1;
-            s->head.d = UP; 
-            if(game_map[s->head.y][s->head.x + 1] == FRUIT){
-                pthread_mutex_lock(&map_lock);
-                game_map[s->head.y][s->head.x + 1] = 0;   
-                pthread_mutex_unlock(&map_lock);        
-            }
-            break;
-        }
-        case DOWN:{
-            s->head.y = s->head.y+1;
-            s->head.d = DOWN; 
-            if(game_map[s->head.y][s->head.x + 1] == FRUIT){
-                pthread_mutex_lock(&map_lock);
-                game_map[s->head.y][s->head.x + 1] = 0; 
-                pthread_mutex_unlock(&map_lock);
-            }
-            break;
-        }
-        case LEFT:{
-            s->head.x = s->head.x-1;
-            s->head.d = LEFT;  
-            break;
-        }
-        case RIGHT:{
-            s->head.x = s->head.x+1;
-            s->head.d = RIGHT;  
-            break;
-        }
-        default: break;
-    }
-    pthread_mutex_lock(&map_lock);
-    game_map[s->head.y][s->head.x] = -(s->player_no);
-    game_map[s->body_segment[0].y][s->body_segment[0].x] = s->player_no;
-    pthread_mutex_unlock(&map_lock);
-    s->length++;
-    game_map[HEIGHT+player_no][WIDTH+2] = s->length+10000;
-    add_fruit();
-}
 int make_thread(void* (*fn)(void *), void* arg){
     int             err;
     pthread_t       tid;
@@ -454,129 +251,6 @@ void* gameplay(void* arg){
                     writeFile("nguoidung.txt", l);
                     goto back;
                 }
-                else if(strcmp(recv_data, "3") == 0){
-                    printf("Received from client in share-socket %d: Show profile\n", fd);
-                    char information[256];
-                    strcat(information, "_");
-                    strcat(information, tmp->usename);
-                    strcat(information, "_");
-                    char c[3]; 
-                    if(tmp->status > 9){
-                        c[0] = tmp->status/10 + '0';
-                        c[1] = tmp->status - 10*(tmp->status/10) + '0';
-                        c[2] = '\0';
-                    }
-                    else{
-                        c[0] = tmp->status + '0';
-                        c[1] = '\0';
-                    }
-                    strcat(information, c);
-                    strcat(information, "_");
-                    if(tmp->win_times > 9){
-                        c[0] = tmp->win_times/10 + '0';
-                        c[1] = tmp->win_times - 10*(tmp->win_times/10) + '0';
-                        c[2] = '\0';
-                    }
-                    else{
-                        c[0] = tmp->win_times + '0';
-                        c[1] = '\0';
-                    }
-                    strcat(information, c);
-                    write(fd, information, 256);
-                    xxx = read(fd, &recv_data, 256);
-                    if(xxx == 0) break;
-                    if(strcmp(recv_data, "3") == 0){
-                        information[0] = '\0';
-                        goto back;
-                    }
-                }
-                else if(strcmp(recv_data, "4") == 0){
-                    printf("Received from client in share-socket %d: Show leaderboard\n", fd);
-                    xxx = read(fd, &recv_data, 256);
-                    if(xxx == 0) break;
-                    if(strcmp(recv_data, "1") == 0){
-                        sortListStatus(&l);
-                        User *user_tmp = l.pHead;
-                        char information[256];
-                        for(int i = 0; i < 9; i++){
-                            strcat(information, "_");
-                            strcat(information, user_tmp->usename);
-                            strcat(information, "_");
-                            char c[3]; 
-                            if(user_tmp->status > 9){
-                                c[0] = user_tmp->status/10 + '0';
-                                c[1] = user_tmp->status - 10*(user_tmp->status/10) + '0';
-                                c[2] = '\0';
-                            }
-                            else{
-                                c[0] = user_tmp->status + '0';
-                                c[1] = '\0';
-                            }
-                            strcat(information, c);
-                            strcat(information, "_");
-                            if(user_tmp->win_times > 9){
-                                c[0] = user_tmp->win_times/10 + '0';
-                                c[1] = user_tmp->win_times - 10*(user_tmp->win_times/10) + '0';
-                                c[2] = '\0';
-                            }
-                            else{
-                                c[0] = user_tmp->win_times + '0';
-                                c[1] = '\0';
-                            }
-                            strcat(information, c);
-                            write(fd, information, 256);
-                            // printf("%s\n", information);
-                            user_tmp = user_tmp->pNext;
-                            information[0] = '\0';
-                        }
-                        xxx = read(fd, &recv_data, 256);
-                        if(xxx == 0) break;
-                        if(strcmp(recv_data, "4") == 0){
-                            goto back;
-                        }
-                    }
-                    else if(strcmp(recv_data, "2") == 0){
-                        sortListWontimes(&l);
-                        User *user_tmp = l.pHead;
-                        char information[256];
-                        for(int i = 0; i < 9; i++){
-                            strcat(information, "_");
-                            strcat(information, user_tmp->usename);
-                            strcat(information, "_");
-                            char c[3]; 
-                            if(user_tmp->status > 9){
-                                c[0] = user_tmp->status/10 + '0';
-                                c[1] = user_tmp->status - 10*(user_tmp->status/10) + '0';
-                                c[2] = '\0';
-                            }
-                            else{
-                                c[0] = user_tmp->status + '0';
-                                c[1] = '\0';
-                            }
-                            strcat(information, c);
-                            strcat(information, "_");
-                            if(user_tmp->win_times > 9){
-                                c[0] = user_tmp->win_times/10 + '0';
-                                c[1] = user_tmp->win_times - 10*(user_tmp->win_times/10) + '0';
-                                c[2] = '\0';
-                            }
-                            else{
-                                c[0] = user_tmp->win_times + '0';
-                                c[1] = '\0';
-                            }
-                            strcat(information, c);
-                            write(fd, information, 256);
-                            // printf("%s\n", information);
-                            user_tmp = user_tmp->pNext;
-                            information[0] = '\0';
-                        }
-                        xxx = read(fd, &recv_data, 256);
-                        if(xxx == 0) break;
-                        if(strcmp(recv_data, "4") == 0){
-                            goto back;
-                        }
-                    }
-                }
                 else if(strcmp(recv_data, "5") == 0){
                     printf("Received from client in share-socket %d: Quit game\n", fd);
                     if(strcmp(recv_data, "5") == 0){
@@ -618,49 +292,13 @@ void* gameplay(void* arg){
     if(number_players != 0) number_players -= 1;
     printf("||Number of players are accessing: %d||\n", number_players);
 
-    //Find three consecutive zeros in map for starting snake position
-    int head_y, head_x;
-    srand(time(NULL));
-    do{
-        head_y = rand() % (HEIGHT - 6) + 3;
-        head_x = rand() % (WIDTH - 6) + 3;
-    } while (!(((game_map[head_y][head_x] == game_map[head_y+1][head_x]) == game_map[head_y+2][head_x]) == 0));
-
-    //Create snake structure
-    snake* player_snake = make_snake(player_no, head_y, head_x);
-
     //Variables for user input
-    char key = UP;
+    char key = DEFAULT_KEY;
     char key_buffer;
-    char map_buffer[map_size];
-    int  bytes_sent, n;
+    int  n;
     int  success = 1;
 
     while(success){
-        // //Check if someone won
-        // if(someone_won)
-        //     success = 0;
-
-        // //Check if you are the winner
-        // if(player_snake->length-3 >= WINNER_LENGTH){
-        //     someone_won = player_no;
-        //     pthread_mutex_lock(&map_lock);
-        //     game_map[0][0] = WINNER;
-        //     pthread_mutex_unlock(&map_lock);
-        // } else if(game_map[0][0] != BORDER){
-        //     pthread_mutex_lock(&map_lock);
-        //     game_map[0][0] = someone_won;
-        //     pthread_mutex_unlock(&map_lock);
-        // }
-
-        //Copy map to buffer, and send to client
-        memcpy(map_buffer, game_map, map_size);
-        bytes_sent = 0;
-        while(bytes_sent < map_size){         
-            bytes_sent += write(fd, game_map, map_size);
-            if (bytes_sent < 0) error("ERROR writing to socket");
-        } 
-
         //Player key input
         bzero(&key_buffer, 1);
         n = read(fd, &key_buffer, 1);
@@ -669,41 +307,25 @@ void* gameplay(void* arg){
 
         //If user key is a direction, then apply it
         key_buffer = toupper(key_buffer);   
-        if(  ((key_buffer == UP)    && !(player_snake->head.d == DOWN))
-        ||((key_buffer == DOWN)  && !(player_snake->head.d == UP)) )
+        if(  key_buffer == UP || key_buffer == DOWN )  
             key = key_buffer;
 
         switch(key){
 
             case UP:
             case DOWN:{
-                if( 0 >= write(fd, &key, 1) ) {
-                    perror("Send error");
+                for(int i=0; i<2; i++){
+			            if(client[i] != fd){
+                            if(write(client[i], (char*)key, sizeof(key)) < 0){
+                                perror("ERROR: write to descriptor failed");
+                                break;
+                            }
+                        }
                 }
             }
 
             default: break;
         }   
-    }
-    if(player_snake->length-3 == WINNER_LENGTH){
-        fprintf(stderr, "Player %d had won!\n", player_no);
-        tmp->win_times += 1;
-        writeFile("nguoidung.txt", l);
-        kill_snake(player_snake);
-        game_map[HEIGHT+player_no][WIDTH+2] = 0;
-        close(fd); 
-        number_players = 0;
-        check_run = 0; 
-        host[0] = '\0';
-        return 0;
-    }
-    else{
-        fprintf(stderr, "Player %d had exited game!\n", player_no);
-        kill_snake(player_snake);
-        game_map[HEIGHT+player_no][WIDTH+2] = 0;
-        if(number_players == 0) check_run = 0;
-        close(fd);  
-        return 0;
     }
 }
 
@@ -716,24 +338,6 @@ int main(){
 
     //Handle Ctrl+C
     signal(SIGINT, ctrl_c_handler);
-
-    //Fill gamestate matrix with zeros
-    memset(game_map, 0, map_size);
-    
-    //Set game borders
-    for(i = 0; i < HEIGHT; i++)
-        game_map[i][0] = game_map[i][WIDTH-2] = BORDER;     
-    for(i = 0; i < WIDTH; i++)
-        game_map[0][i] = game_map[HEIGHT-1][i] = BORDER;
-
-    //Randomly add five fruit
-    srand(time(NULL));
-    for(i = 0; i < 5; i++)
-        add_fruit();
-    for(i = 0; i < 3; i++)
-        add_wall();
-    for(i = 0; i < 2; i++)
-        add_wall2();
     //Create server socket
     socket_fds[0] = socket(AF_INET, SOCK_STREAM, 0);
     if (socket_fds[0] < 0) 
@@ -755,12 +359,13 @@ int main(){
     socklen_t clilen = sizeof(socket_addr[0]);
 
     while(1){
-        for(i = 1;; i++){
+        for(i = 1; ; i++){
             //Accepting an incoming connection request
             socket_fds[i] = accept(socket_fds[0], (struct sockaddr *) &socket_addr[i], &clilen);
             if (socket_fds[i] < 0) 
                 error("ERROR on accept");
             
+            client[i-1] = socket_fds[i];
             if(someone_won){
                 someone_won = 0;
             }

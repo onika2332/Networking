@@ -117,49 +117,13 @@ char *showRoom(char room[]){
     return main_player;
 }
 
-void showProfile(char user[]){
-    Snake();
-    printf(" _____________________Profile_____________________ \n");
-    const char space[2] = "_";
-    char *token;
-    char tmp[BUFF_SIZE];
-    float playedtimes;
-    float wontimes;
-    float pw;
-    token = strtok(user, space);
-    strcpy(tmp, token);
-    printf(">>Account     : %s\n", tmp);
-    token = strtok(NULL, space);
-    strcpy(tmp, token);
-    if(strlen(tmp) > 1){
-        playedtimes = (tmp[0] - '0')*10 + (tmp[1] - '0');
-    }
-    else playedtimes = tmp[0] - '0';
-    printf(">>Played-times: %s\n", tmp);
-    token = strtok(NULL, space);
-    strcpy(tmp, token);
-    if(strlen(tmp) > 1){
-        wontimes = (tmp[0] - '0')*10 + (tmp[1] - '0');
-    }
-    else wontimes = tmp[0] - '0';
-    printf(">>Won-times   : %s\n", tmp);
-    if(wontimes == 0) pw = 0;
-    else pw = playedtimes/wontimes;
-    printf(">>PW-rate     : %.2f\n", pw);
-}
-
 int sign_to_server(int sockfd){
-    int choice_lb;
     char test[BUFF_SIZE];
     char choice[2];
     char usename[BUFF_SIZE];
     char password[BUFF_SIZE];
     char tmp[BUFF_SIZE];
-    char tmp2[BUFF_SIZE];
     int signup = 0;
-    // List l;
-    // InitList(&l);
-    // User *p;
     while(1){
 
         Snake();
@@ -315,132 +279,6 @@ int sign_to_server(int sockfd){
                             signup = -3;
                             goto back;
                             break;
-                        case 3:
-                            signup = 0;
-                            write(sockfd, choice, 2);
-                            read(sockfd, &test, BUFF_SIZE);
-                            // printf("%s\n", test);
-                            showProfile(test);
-                            printf("Press enter to continue...");
-                            getchar();
-                            write(sockfd, choice, 2);                      
-                            goto back;
-                        case 4:
-                            signup = 0;
-                            write(sockfd, choice, 2);
-                            Snake();
-                            printf(" ___________________Leaderboard___________________ \n");
-                            printf("|    => [1]. Ranking by number of played-times    |\n");
-                            printf("|    => [2]. Ranking by number of won-times       |\n");
-                            printf("|_________________________________________________|\n");
-                            printf("===> ");
-                            scanf("%d", &choice_lb);
-                            while(choice_lb < 1 || choice_lb >2){
-                                Snake();
-                                printf(" ___________________Leaderboard___________________ \n");
-                                printf("|    => [1]. Ranking by number of played-times    |\n");
-                                printf("|    => [2]. Ranking by number of won-times       |\n");
-                                printf("|_________________________________________________|\n");
-                                printf("===> ");
-                                __fpurge(stdin);
-                                scanf("%d", &choice_lb);
-                            }
-                            if(choice_lb == 1){
-                                write(sockfd, "1", 2);
-                                Snake();
-                                printf(" ______________________Leaderboard______________________ \n");
-                                printf("| Top |    Account    | Played-times |Won-times| PW-rate|\n");
-                                for(int i = 0; i < 9; i++){
-                                    read(sockfd, &test, BUFF_SIZE);
-                                    char *token;
-                                    char tmp[BUFF_SIZE];
-                                    float playedtimes;
-                                    float wontimes;
-                                    float pw;
-                                    const char space[2] = "_";
-                                    if(i<3){
-                                        if(i == 0) printf("***%d***\t", i+1);
-                                        else if(i == 1) printf(" **%d**\t", i+1);
-                                        else if(i == 2) printf("  *%d*\t", i+1);
-                                    }
-                                    else printf("  [%d]\t", i+1);
-                                    token = strtok(test, space);
-                                    strcpy(tmp, token);
-                                    printf("%-22s", tmp);
-                                    token = strtok(NULL, space);
-                                    strcpy(tmp, token);
-                                    if(strlen(tmp) > 1){
-                                        playedtimes = (tmp[0] - '0')*10 + (tmp[1] - '0');
-                                    }
-                                    else playedtimes = tmp[0] - '0';
-                                    printf("%-11s", tmp);
-                                    token = strtok(NULL, space);
-                                    strcpy(tmp, token);
-                                    if(strlen(tmp) > 1){
-                                        wontimes = (tmp[0] - '0')*10 + (tmp[1] - '0');
-                                    }
-                                    else wontimes = tmp[0] - '0';
-                                    printf("%-9s", tmp);
-                                    if(wontimes == 0) pw = 0;
-                                    else pw = playedtimes/wontimes;
-                                    printf("%.2f\n", pw);
-                                    // printf("%s\n", test);
-                                }
-                                printf("Press enter to continue...");
-                                __fpurge(stdin);
-                                getchar();
-                                write(sockfd, choice, 2);                      
-                                goto back;
-                            }
-                            else if(choice_lb == 2){
-                                write(sockfd, "2", 2);
-                                Snake();
-                                printf(" ______________________Leaderboard______________________ \n");
-                                printf("| Top |    Account    |Won-times| Played-times | PW-rate|\n");
-                                for(int i = 0; i < 9; i++){
-                                    read(sockfd, &test, BUFF_SIZE);
-                                    char *token;
-                                    char tmp[BUFF_SIZE];
-                                    float playedtimes;
-                                    float wontimes;
-                                    float pw;
-                                    const char space[2] = "_";
-                                    if(i<3){
-                                        if(i == 0) printf("***%d***\t", i+1);
-                                        else if(i == 1) printf(" **%d**\t", i+1);
-                                        else if(i == 2) printf("  *%d*\t", i+1);
-                                    }
-                                    else printf("  [%d]\t", i+1);
-                                    token = strtok(test, space);
-                                    strcpy(tmp, token);
-                                    printf("%-19s", tmp);
-                                    token = strtok(NULL, space);
-                                    strcpy(tmp, token);
-                                    if(strlen(tmp) > 1){
-                                        playedtimes = (tmp[0] - '0')*10 + (tmp[1] - '0');
-                                    }
-                                    else playedtimes = tmp[0] - '0';
-                                    // printf("%-11s", tmp);
-                                    strcpy(tmp2, tmp);
-                                    token = strtok(NULL, space);
-                                    strcpy(tmp, token);
-                                    if(strlen(tmp) > 1){
-                                        wontimes = (tmp[0] - '0')*10 + (tmp[1] - '0');
-                                    }
-                                    else wontimes = tmp[0] - '0';
-                                    printf("%-13s", tmp);
-                                    printf("%-10s", tmp2);
-                                    if(wontimes == 0) pw = 0;
-                                    else pw = playedtimes/wontimes;
-                                    printf("%.2f\n", pw);
-                                    // printf("%s\n", test);
-                                }
-                                printf("Press enter to continue...");
-                                __fpurge(stdin);
-                                getchar();
-                                write(sockfd, choice, 2);                      
-                                goto back;
-                            }
                         case 5:
                             signup = 0;
                             write(sockfd, choice, 2);
@@ -468,7 +306,7 @@ void* write_to_server(void* arg){
     ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 1000000;
     while(game_result == ONGOING){
         nanosleep(&ts, NULL);
-        int n = write(sockfd, &key, 1);
+        int n = write(sockfd, &key, sizeof(key));
         if(n < 0) 
             error("ERROR writing to socket.");
     }
@@ -478,8 +316,6 @@ void* write_to_server(void* arg){
 void* update_screen(void* arg){    
     int  sockfd = *(int*) arg;
     char data[2];
-    int  i, j, n;
-
     while(game_result == ONGOING){
 
         //Recieve updated map from server
@@ -645,26 +481,6 @@ int main(int argc, char *argv[]){
         } else key = DEFAULT_KEY;
     }
 
-    //Show the user who won
-    WINDOW* announcement = newwin(7, 35, (HEIGHT - 7)/2, (WIDTH - 35)/2);
-    box(announcement, 0, 0);
-    if (game_result == WINNER){
-        mvwaddstr(announcement, 2, (35-21)/2, "Game Over - You WIN!");
-        mvwaddstr(announcement, 4, (35-21)/2, "Press any key to quit.");
-        wbkgd(announcement,COLOR_PAIR(2));
-    } else{
-        mvwaddstr(announcement, 2, (35-21)/2, "Game Over - you lose!");
-        if(game_result > 0)
-            mvwprintw(announcement, 3, (35-13)/2, "Player %d won.", game_result);
-        mvwaddstr(announcement, 4, (35-21)/2, "Press any key to quit.");
-        wbkgd(announcement,COLOR_PAIR(1));
-    }
-    mvwin(announcement, (HEIGHT - 7)/2, (WIDTH - 35)/2);
-    wnoutrefresh(announcement);
-    wrefresh(announcement);
-    sleep(2);
-    wgetch(announcement);
-    delwin(announcement);
     wclear(win);
     
     echo(); 
