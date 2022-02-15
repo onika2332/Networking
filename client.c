@@ -21,13 +21,9 @@
 #include <locale.h>
 
 #define BUFF_SIZE   256
-#define PORT        5500
+#define PORT        5501
 #define HEIGHT      24
 #define WIDTH       80
-#define FRUIT       -111
-#define WALL        -1111
-#define WALL2       -1112
-#define BORDER      -99
 #define REFRESH     0.15
 #define WINNER      -94
 #define ONGOING     -34
@@ -37,6 +33,7 @@
 #define DEFAULT_KEY 'N'
 #define LEFT_SIDE 1
 #define RIGHT_SIDE 2
+
 WINDOW* win;
 char key[2]; 
 int game_result = ONGOING;
@@ -333,17 +330,17 @@ void* update_screen(void* arg){
         income_key = read(sockfd, data, 1);
         if(income_key <= 0)
             perror("acnbabc");
-        pthread_mutex_lock(&mutex);
+        // pthread_mutex_lock(&mutex);
         if( data[0] == UP_KEY ) {
-            if( side == LEFT_SIDE) 
-                displace(right, 2, HEIGHT);
-            else if( side == RIGHT_SIDE) 
-                displace(left, 2, HEIGHT);
-        } else if( data[0] == DOWN_KEY ) {
             if( side == LEFT_SIDE) 
                 displace(right, -2, HEIGHT);
             else if( side == RIGHT_SIDE) 
                 displace(left, -2, HEIGHT);
+        } else if( data[0] == DOWN_KEY ) {
+            if( side == LEFT_SIDE) 
+                displace(right, 2, HEIGHT);
+            else if( side == RIGHT_SIDE) 
+                displace(left, 2, HEIGHT);
         }
 
         updatePosition(ball);
@@ -355,15 +352,15 @@ void* update_screen(void* arg){
             // conflict with window
             ball->plus_y = -1 * ball->plus_y;
         }
-        pthread_mutex_unlock(&mutex);
+        // pthread_mutex_unlock(&mutex);
         /// Draw screen
         wclear(win);
         box(win, 0, 0);
         for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
-                mvwaddch(win, i, 1, 'H');
+            mvwaddch(win, i, 1, 'H');
         }
         for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
-                mvwaddch(win, i, 1, 'H');
+            mvwaddch(win, i, WIDTH-2, 'H');
         }
         mvwaddch(win, ball->center->y, ball->center->x, 'O');
         
@@ -483,23 +480,23 @@ int main(int argc, char *argv[]){
             key[0] = key_buffer;
             // update paddle
             if( side == LEFT_SIDE && key[0] == UP_KEY) {
-                displace(left, 2, HEIGHT);
-            } else if( side == LEFT_SIDE && key[0] == DOWN_KEY) {
                 displace(left, -2, HEIGHT);
+            } else if( side == LEFT_SIDE && key[0] == DOWN_KEY) {
+                displace(left, 2, HEIGHT);
             } else if( side == RIGHT_SIDE && key[0] == UP_KEY) {
-                displace(right, 2, HEIGHT);
-            } else if( side == RIGHT_SIDE && key[0] == DOWN_KEY) {
                 displace(right, -2, HEIGHT);
+            } else if( side == RIGHT_SIDE && key[0] == DOWN_KEY) {
+                displace(right, 2, HEIGHT);
             }
             pthread_mutex_unlock(&mutex);
         }
         wclear(win);
         box(win, 0, 0);
         for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
-                mvwaddch(win, i, 1, 'H');
+            mvwaddch(win, i, 1, 'H');
         }
         for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
-                mvwaddch(win, i, 1, 'H');
+            mvwaddch(win, i, WIDTH - 2, 'H');
         }
         mvwaddch(win, ball->center->y, ball->center->x, 'O');
         
