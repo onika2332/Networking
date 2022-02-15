@@ -21,13 +21,9 @@
 #include <locale.h>
 
 #define BUFF_SIZE   256
-#define PORT        5500
+#define PORT        5501
 #define HEIGHT      24
 #define WIDTH       80
-#define FRUIT       -111
-#define WALL        -1111
-#define WALL2       -1112
-#define BORDER      -99
 #define REFRESH     0.15
 #define WINNER      -94
 #define ONGOING     -34
@@ -37,6 +33,7 @@
 #define DEFAULT_KEY 'N'
 #define LEFT_SIDE 1
 #define RIGHT_SIDE 2
+
 WINDOW* win;
 char key[2]; 
 int game_result = ONGOING;
@@ -348,17 +345,18 @@ void* update_screen(void* arg){
         } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
             // conflict with window
             ball->plus_y = -1 * ball->plus_y;
-        }
+        
         pthread_mutex_unlock(&mutex);
         }
         /// Draw screen
         wclear(win);
         box(win, '|', '-');
         for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
-                mvwaddch(win, i, 1, 'H');
+            mvwaddch(win, i, 1, 'H');
         }
         for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
-                mvwaddch(win, i, WIDTH - 2, 'H');
+            mvwaddch(win, i, WIDTH-2, 'H');
+
         }
         mvwaddch(win, ball->center->y, ball->center->x, 'O');
         
@@ -494,7 +492,7 @@ int main(int argc, char *argv[]){
         wclear(win);
         box(win, '|', '-');
         for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
-                mvwaddch(win, i, 1, 'H');
+            mvwaddch(win, i, 1, 'H');
         }
         for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
                 mvwaddch(win, i, WIDTH - 2, 'H');
