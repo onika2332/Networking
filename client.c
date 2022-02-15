@@ -21,7 +21,7 @@
 #include <locale.h>
 
 #define BUFF_SIZE   256
-#define PORT        5500
+#define PORT        5501
 #define HEIGHT      24
 #define WIDTH       80
 #define FRUIT       -111
@@ -312,45 +312,104 @@ void* write_to_server(void* arg){
     return 0;
 }
 
-void* update_screen(void* arg){    
-    int  sockfd = *(int*) arg;
+void* capture_key_press(void* arg) { // capture key press in 0.1s
+    int sockfd = *(int*) arg;
+    char key_buf;
+    struct timespec ts;
+    ts.tv_sec = REFRESH;
+    ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 100000; // 0.1s
+    
+    while(game_result == ONGOING) {
+        nanosleep(&ts, NULL);
+        bzero(&key_buf, 1);
+        timeout(REFRESH * 00);
+        
+        if( (key_buf = wgetch(win)) != ERR ) {
+            key_buf = toupper(key_buf);
+            if(key_buf == '.'){
+                game_result = INTERRUPTED;
+                break;
+            } else if( (key_buf == UP_KEY) || (key_buf == DOWN_KEY) ) {
+                pthread_mutex_lock(&mutex);
+                key[0] = key_buf;
+                make_thread(write_to_server, &sockfd);
+                // update paddle
+                if( side == LEFT_SIDE && key[0] == UP_KEY) {
+                    displace(left, -2, HEIGHT);
+                } else if( side == LEFT_SIDE && key[0] == DOWN_KEY) {
+                    displace(left, 2, HEIGHT);
+                } else if( side == RIGHT_SIDE && key[0] == UP_KEY) {
+                    displace(right, -2, HEIGHT);
+                } else if( side == RIGHT_SIDE && key[0] == DOWN_KEY) {
+                    displace(right, 2, HEIGHT);
+                }
+                // checking the conflict
+                if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
+                    //conflict with paddle
+                    ball->plus_x = -1 * ball->plus_x;
+                } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
+                    // conflict with window
+                    ball->plus_y = -1 * ball->plus_y;
+                }
+                pthread_mutex_unlock(&mutex);
+            }
+
+        }
+    }
+    return 0;
+}
+
+void* receive_rival_paddle(void* arg) { // every 0.1s
+    int sockfd = *(int*) arg;
     char data[2];
-
+    
     while(game_result == ONGOING){
-
         struct timespec ts;
         ts.tv_sec = REFRESH;
-        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 500000; // 0.5s
+        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 100000; // 0.1s
         nanosleep(&ts, NULL);
-        updatePosition(ball);
         //Recieve updated rival paddle from server
         int income_key;
         income_key = read(sockfd, data, 1);
         if(income_key <= 0)
             perror("acnbabc");
         else {
-        pthread_mutex_lock(&mutex);
-        if( data[0] == UP_KEY ) {
-            if( side == LEFT_SIDE) 
-                displace(right, -2, HEIGHT);
-            else if( side == RIGHT_SIDE) 
-                displace(left, -2, HEIGHT);
-        } else if( data[0] == DOWN_KEY ) {
-            if( side == LEFT_SIDE) 
-                displace(right, 2, HEIGHT);
-            else if( side == RIGHT_SIDE) 
-                displace(left, 2, HEIGHT);
+            pthread_mutex_lock(&mutex);
+            if( data[0] == UP_KEY ) {
+                if( side == LEFT_SIDE) 
+                    displace(right, -2, HEIGHT);
+                else if( side == RIGHT_SIDE) 
+                    displace(left, -2, HEIGHT);
+            } else if( data[0] == DOWN_KEY ) {
+                if( side == LEFT_SIDE) 
+                    displace(right, 2, HEIGHT);
+                else if( side == RIGHT_SIDE) 
+                    displace(left, 2, HEIGHT);
+            }
+
+            // checking the conflict
+            if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
+                //conflict with paddle
+                ball->plus_x = -1 * ball->plus_x;
+            } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
+                // conflict with window
+                ball->plus_y = -1 * ball->plus_y;
+            }
+            pthread_mutex_unlock(&mutex);
         }
-        // checking the conflict
-        if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
-            //conflict with paddle
-            ball->plus_x = -1 * ball->plus_x;
-        } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
-            // conflict with window
-            ball->plus_y = -1 * ball->plus_y;
-        }
-        pthread_mutex_unlock(&mutex);
-        }
+    }
+    return 0;
+}
+
+void* update_screen(void* arg){     // every 0.1s
+
+    while(game_result == ONGOING){
+
+        struct timespec ts;
+        ts.tv_sec = REFRESH;
+        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 100000; // 0.1s
+        nanosleep(&ts, NULL);
+        
         /// Draw screen
         wclear(win);
         box(win, '|', '-');
@@ -361,9 +420,8 @@ void* update_screen(void* arg){
                 mvwaddch(win, i, WIDTH - 2, 'H');
         }
         mvwaddch(win, ball->center->y, ball->center->x, 'O');
-        
-        wrefresh(win);
 
+        wrefresh(win);
     }
     return 0;
 }
@@ -372,7 +430,6 @@ int main(int argc, char *argv[]){
     int                 sockfd;
     struct sockaddr_in  serv_addr;
     struct hostent*     server;
-    char                key_buffer;
 
     if (argc < 2){
         fprintf(stderr,"Please type: %s [server ip] to launch the game.\n", argv[0]);
@@ -461,56 +518,34 @@ int main(int argc, char *argv[]){
 
     //Start writing inputs to the server every REFRESH seconds and updating the screen
     make_thread(update_screen, &sockfd);
+    make_thread(capture_key_press, &sockfd);
+    make_thread(receive_rival_paddle, &sockfd);
 
-    while(game_result == ONGOING){
-        //Get player input with time out
-        bzero(&key_buffer, 1);
-        timeout(REFRESH * 00);
-        key_buffer = wgetch(win);
-        key_buffer = toupper(key_buffer);
-        if(key_buffer == '.'){
-            game_result = INTERRUPTED;
-            break;
-        } else if((key_buffer == UP_KEY) || (key_buffer == DOWN_KEY) ) {
-            pthread_mutex_lock(&mutex);
-            key[0] = key_buffer;
-            make_thread(write_to_server, &sockfd);
-            // update paddle
-            if( side == LEFT_SIDE && key[0] == UP_KEY) {
-                displace(left, -2, HEIGHT);
-            } else if( side == LEFT_SIDE && key[0] == DOWN_KEY) {
-                displace(left, 2, HEIGHT);
-            } else if( side == RIGHT_SIDE && key[0] == UP_KEY) {
-                displace(right, -2, HEIGHT);
-            } else if( side == RIGHT_SIDE && key[0] == DOWN_KEY) {
-                displace(right, 2, HEIGHT);
-            }
-            pthread_mutex_unlock(&mutex);
+    while(game_result == ONGOING){ // every 0.4s
+        //Update ball
+        pthread_mutex_lock(&mutex);
+        // checking the conflict
+        if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
+            //conflict with paddle
+            ball->plus_x = -1 * ball->plus_x;
+        } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
+            // conflict with window
+            ball->plus_y = -1 * ball->plus_y;
         }
+        updatePosition(ball);
+        pthread_mutex_unlock(&mutex);
         struct timespec ts;
         ts.tv_sec = REFRESH;
-        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 250000; // 0.25s
+        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 400000; // 0.4s
         nanosleep(&ts, NULL);
-        wclear(win);
-        box(win, '|', '-');
-        for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
-                mvwaddch(win, i, 1, 'H');
-        }
-        for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
-                mvwaddch(win, i, WIDTH - 2, 'H');
-        }
-        // updatePosition(ball);
-        mvwaddch(win, ball->center->y, ball->center->x, 'O');
-        
-        wrefresh(win);
     }
 
     wclear(win);
-    
     echo(); 
     curs_set(1);  
     endwin();
     //Close connection
     close(sockfd);
+    printf("Good bye!!!");
     return 0;
 }

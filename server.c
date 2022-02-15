@@ -16,7 +16,7 @@
 
 
 #define DEFAULT_KEY         'N'
-#define PORT                5500
+#define PORT                5501
 #define MAX_PLAYERS         100
 #define HEIGHT              24
 #define WIDTH               80
@@ -291,8 +291,6 @@ void* gameplay(void* arg){
     end:
     if(number_players != 0) number_players -= 1;
     printf("||Number of players are accessing: %d||\n", number_players);
-
-    //Find three consecutive zeros in map for starting snake position
 
     //Variables for user input
     
