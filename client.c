@@ -472,11 +472,6 @@ int main(int argc, char *argv[]){
     printf("Game will start after: 1 seconds\n");
     sleep(1);
 
-
-    // Init ball, paddle
-    left = setPaddle(1, HEIGHT/2, 2); // left paddle
-    right = setPaddle( WIDTH - 2, HEIGHT/2, 2); // right paddle
-    ball = setBall( WIDTH/2, HEIGHT/2, 2, 2); // ball
     //Create Ncurses Window, with input, no echo and hidden cursor
     initscr();      
     cbreak();
@@ -516,12 +511,21 @@ int main(int argc, char *argv[]){
     mvprintw((HEIGHT-20)/2 + 19, (WIDTH-58)/2,"Press any key to start . . ."); 
     wgetch(win);
 
+    // Init ball, paddle
+    left = setPaddle(1, HEIGHT/2, 2); // left paddle
+    right = setPaddle( WIDTH - 2, HEIGHT/2, 2); // right paddle
+    ball = setBall( WIDTH/2, HEIGHT/2, 2, 2); // ball
+
     //Start writing inputs to the server every REFRESH seconds and updating the screen
     make_thread(update_screen, &sockfd);
     make_thread(capture_key_press, &sockfd);
     make_thread(receive_rival_paddle, &sockfd);
 
     while(game_result == ONGOING){ // every 0.4s
+        struct timespec ts;
+        ts.tv_sec = REFRESH;
+        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 400000; // 0.4s
+        nanosleep(&ts, NULL);
         //Update ball
         pthread_mutex_lock(&mutex);
         // checking the conflict
@@ -531,13 +535,11 @@ int main(int argc, char *argv[]){
         } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
             // conflict with window
             ball->plus_y = -1 * ball->plus_y;
+        } else if( 1 > ball->center->x || ball->center->x > WIDTH - 2 ) {
+            // reset position of ball
         }
         updatePosition(ball);
         pthread_mutex_unlock(&mutex);
-        struct timespec ts;
-        ts.tv_sec = REFRESH;
-        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 400000; // 0.4s
-        nanosleep(&ts, NULL);
     }
 
     wclear(win);
