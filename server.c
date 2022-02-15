@@ -301,7 +301,6 @@ void* gameplay(void* arg){
     int  success = 1;
 
     while(success){
-
         int i;
         char key[2];
         key[0] = DEFAULT_KEY;
@@ -310,16 +309,14 @@ void* gameplay(void* arg){
         n = read(fd, &key_buffer, 1);
         if (n <= 0)
             break;
-
         //If user key is a direction, then apply it
         key_buffer = toupper(key_buffer);   
         if(  key_buffer == UP || key_buffer == DOWN ) { 
             key[0] = key_buffer;
-            printf("Key is %s", key);
         }
         for(i = 0; i < 2; i++){
 			    if(client[i] != fd){
-                    printf("Key is %s", key);
+                    //printf("Key is %s", key);
                     if(write(client[i], key, 2) < 0){
                         perror("ERROR: write to descriptor failed");
                         break;
