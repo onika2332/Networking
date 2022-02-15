@@ -537,6 +537,15 @@ int main(int argc, char *argv[]){
             ball->plus_y = -1 * ball->plus_y;
         } else if( 1 > ball->center->x || ball->center->x > WIDTH - 2 ) {
             // reset position of ball
+            left->center->x = 1;
+            left->center->y = HEIGHT / 2;
+
+            right->center->x = WIDTH - 2;
+            right->center->y = HEIGHT / 2;
+
+            ball->center->x = WIDTH / 2;
+            ball->center->y = HEIGHT / 2;
+
         }
         updatePosition(ball);
         pthread_mutex_unlock(&mutex);
