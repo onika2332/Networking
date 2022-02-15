@@ -20,16 +20,9 @@
 #define MAX_PLAYERS         100
 #define HEIGHT              24
 #define WIDTH               80
-#define MAX_SNAKE_LENGTH    HEIGHT * WIDTH
 #define WINNER_LENGTH       10
-#define WALL                -1111
-#define WALL2               -1112
-#define BORDER              -99
-#define WINNER              -94
 #define UP_KEY              'W'
 #define DOWN_KEY            'S'
-#define LEFT_KEY            'A'
-#define RIGHT_KEY           'D'
  
 int             someone_won = 0;
 int check_run = 0;
@@ -299,9 +292,9 @@ void* gameplay(void* arg){
     int  success = 1;
 
     while(success){
-        int i;
         char key[2];
         key[0] = DEFAULT_KEY;
+        int i;
         //Player key input
         bzero(&key_buffer, 1);
         n = read(fd, &key_buffer, 1);
@@ -315,6 +308,13 @@ void* gameplay(void* arg){
         for(i = 0; i < 2; i++){
 			    if(client[i] != fd){
                     //printf("Key is %s", key);
+            printf("Key is %s\n", key);
+        } else {
+            key[0] = DEFAULT_KEY;
+        }
+        for(i = 0; i < 2; i++){
+			    if(client[i] != fd){
+                    // printf("Key is %s\n", key);
                     if(write(client[i], key, 2) < 0){
                         perror("ERROR: write to descriptor failed");
                         break;
