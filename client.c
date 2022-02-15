@@ -24,10 +24,6 @@
 #define PORT        5501
 #define HEIGHT      24
 #define WIDTH       80
-#define FRUIT       -111
-#define WALL        -1111
-#define WALL2       -1112
-#define BORDER      -99
 #define REFRESH     0.15
 #define WINNER      -94
 #define ONGOING     -34
@@ -37,6 +33,7 @@
 #define DEFAULT_KEY 'N'
 #define LEFT_SIDE 1
 #define RIGHT_SIDE 2
+
 WINDOW* win;
 char key[2]; 
 int game_result = ONGOING;
@@ -69,13 +66,6 @@ int make_thread(void* (*fn)(void *), void* arg){
 
 void Snake(){
     system("clear");
-    printf("     _______  __    _  _______  ___   _  _______   \n");
-    printf("    |       ||  |  | ||   _   ||   | | ||       |  \n");
-    printf("    |  _____||   |_| ||  |_|  ||   |_| ||    ___|  \n");
-    printf("    | |_____ |       ||       ||      _||   |___   \n");
-    printf("    |_____  ||  _    ||       ||     |_ |    ___|  \n");
-    printf("     _____| || | |   ||   _   ||    _  ||   |___   \n");
-    printf("    |_______||_|  |__||__| |__||___| |_||_______|  \n");
     printf("\n");
 }
 
@@ -414,10 +404,11 @@ void* update_screen(void* arg){     // every 0.1s
         wclear(win);
         box(win, '|', '-');
         for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
-                mvwaddch(win, i, 1, 'H');
+            mvwaddch(win, i, 1, 'H');
         }
         for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
-                mvwaddch(win, i, WIDTH - 2, 'H');
+            mvwaddch(win, i, WIDTH-2, 'H');
+
         }
         mvwaddch(win, ball->center->y, ball->center->x, 'O');
 
@@ -537,6 +528,7 @@ int main(int argc, char *argv[]){
             ball->plus_y = -1 * ball->plus_y;
         } else if( 1 > ball->center->x || ball->center->x > WIDTH - 2 ) {
             // reset position of ball
+
             left->center->x = 1;
             left->center->y = HEIGHT / 2;
 
