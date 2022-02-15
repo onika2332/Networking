@@ -15,7 +15,7 @@
 #include "game_action.h"
 
 
-#define DEFAULT_KEY 'n'
+#define DEFAULT_KEY         'N'
 #define PORT                5500
 #define MAX_PLAYERS         100
 #define HEIGHT              24
@@ -292,13 +292,19 @@ void* gameplay(void* arg){
     if(number_players != 0) number_players -= 1;
     printf("||Number of players are accessing: %d||\n", number_players);
 
+    //Find three consecutive zeros in map for starting snake position
+
     //Variables for user input
-    char key = DEFAULT_KEY;
+    
     char key_buffer;
-    int  n;
+    int n;
     int  success = 1;
 
     while(success){
+
+        int i;
+        char key[2];
+        key[0] = DEFAULT_KEY;
         //Player key input
         bzero(&key_buffer, 1);
         n = read(fd, &key_buffer, 1);
@@ -307,25 +313,19 @@ void* gameplay(void* arg){
 
         //If user key is a direction, then apply it
         key_buffer = toupper(key_buffer);   
-        if(  key_buffer == UP || key_buffer == DOWN )  
-            key = key_buffer;
-
-        switch(key){
-
-            case UP:
-            case DOWN:{
-                for(int i=0; i<2; i++){
-			            if(client[i] != fd){
-                            if(write(client[i], (char*)key, sizeof(key)) < 0){
-                                perror("ERROR: write to descriptor failed");
-                                break;
-                            }
-                        }
+        if(  key_buffer == UP || key_buffer == DOWN ) { 
+            key[0] = key_buffer;
+            printf("Key is %s", key);
+        }
+        for(i = 0; i < 2; i++){
+			    if(client[i] != fd){
+                    printf("Key is %s", key);
+                    if(write(client[i], key, 2) < 0){
+                        perror("ERROR: write to descriptor failed");
+                        break;
+                    }
                 }
-            }
-
-            default: break;
-        }   
+        }  
     }
 }
 
