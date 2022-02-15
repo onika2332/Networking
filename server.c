@@ -291,20 +291,25 @@ void* gameplay(void* arg){
     
     char key_buffer;
     int n;
-    char key[2];
-    key[0] = DEFAULT_KEY;
-    while(1){
+    int  success = 1;
+
+    while(success){
+        char key[2];
+        key[0] = DEFAULT_KEY;
         int i;
         //Player key input
         bzero(&key_buffer, 1);
         n = read(fd, &key_buffer, 1);
         if (n <= 0)
             break;
-
         //If user key is a direction, then apply it
         key_buffer = toupper(key_buffer);   
         if(  key_buffer == UP || key_buffer == DOWN ) { 
             key[0] = key_buffer;
+        }
+        for(i = 0; i < 2; i++){
+			    if(client[i] != fd){
+                    //printf("Key is %s", key);
             printf("Key is %s\n", key);
         } else {
             key[0] = DEFAULT_KEY;

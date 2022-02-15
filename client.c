@@ -303,15 +303,9 @@ int sign_to_server(int sockfd){
 
 void* write_to_server(void* arg){
     int sockfd = *(int *) arg;
-    struct timespec ts;
-    ts.tv_sec = REFRESH;
-    ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 200000; // 0.5s
-    while(game_result == ONGOING){
-        nanosleep(&ts, NULL);
-        int n = write(sockfd, key, 2);
-        if(n < 0) 
-            error("ERROR writing to socket.");
-    }
+    int n = write(sockfd, key, 2);
+    if(n < 0) 
+        error("ERROR writing to socket.");
     return 0;
 }
 
@@ -325,12 +319,14 @@ void* update_screen(void* arg){
         ts.tv_sec = REFRESH;
         ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 500000; // 0.5s
         nanosleep(&ts, NULL);
+        updatePosition(ball);
         //Recieve updated rival paddle from server
         int income_key;
         income_key = read(sockfd, data, 1);
         if(income_key <= 0)
             perror("acnbabc");
-        // pthread_mutex_lock(&mutex);
+        else {
+        pthread_mutex_lock(&mutex);
         if( data[0] == UP_KEY ) {
             if( side == LEFT_SIDE) 
                 displace(right, -2, HEIGHT);
@@ -342,8 +338,6 @@ void* update_screen(void* arg){
             else if( side == RIGHT_SIDE) 
                 displace(left, 2, HEIGHT);
         }
-
-        updatePosition(ball);
         // checking the conflict
         if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
             //conflict with paddle
@@ -351,16 +345,18 @@ void* update_screen(void* arg){
         } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
             // conflict with window
             ball->plus_y = -1 * ball->plus_y;
+        
+        pthread_mutex_unlock(&mutex);
         }
-        // pthread_mutex_unlock(&mutex);
         /// Draw screen
         wclear(win);
-        box(win, 0, 0);
+        box(win, '|', '-');
         for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
             mvwaddch(win, i, 1, 'H');
         }
         for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
             mvwaddch(win, i, WIDTH-2, 'H');
+
         }
         mvwaddch(win, ball->center->y, ball->center->x, 'O');
         
@@ -462,11 +458,9 @@ int main(int argc, char *argv[]){
     wgetch(win);
 
     //Start writing inputs to the server every REFRESH seconds and updating the screen
-    make_thread(write_to_server, &sockfd);
     make_thread(update_screen, &sockfd);
 
     while(game_result == ONGOING){
-        key[0] = DEFAULT_KEY;
         //Get player input with time out
         bzero(&key_buffer, 1);
         timeout(REFRESH * 00);
@@ -478,6 +472,7 @@ int main(int argc, char *argv[]){
         } else if((key_buffer == UP_KEY) || (key_buffer == DOWN_KEY) ) {
             pthread_mutex_lock(&mutex);
             key[0] = key_buffer;
+            make_thread(write_to_server, &sockfd);
             // update paddle
             if( side == LEFT_SIDE && key[0] == UP_KEY) {
                 displace(left, -2, HEIGHT);
@@ -490,14 +485,19 @@ int main(int argc, char *argv[]){
             }
             pthread_mutex_unlock(&mutex);
         }
+        struct timespec ts;
+        ts.tv_sec = REFRESH;
+        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 250000; // 0.25s
+        nanosleep(&ts, NULL);
         wclear(win);
-        box(win, 0, 0);
+        box(win, '|', '-');
         for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
             mvwaddch(win, i, 1, 'H');
         }
         for( int i = right->center->y - right->halfLength; i <= right->center->y + right->halfLength; i++) {
-            mvwaddch(win, i, WIDTH - 2, 'H');
+                mvwaddch(win, i, WIDTH - 2, 'H');
         }
+        // updatePosition(ball);
         mvwaddch(win, ball->center->y, ball->center->x, 'O');
         
         wrefresh(win);
