@@ -21,7 +21,7 @@
 #include <locale.h>
 
 #define BUFF_SIZE   256
-#define PORT        5501
+#define PORT        5500
 #define HEIGHT      24
 #define WIDTH       80
 #define FRUIT       -111
@@ -31,16 +31,19 @@
 #define REFRESH     0.15
 #define WINNER      -94
 #define ONGOING     -34
+#define LEFT_PAUSE_GAME  -55
+#define RIGHT_PAUSE_GAME -65
 #define INTERRUPTED -30
 #define UP_KEY      'W'
 #define DOWN_KEY    'S'
 #define DEFAULT_KEY 'N'
 #define LEFT_SIDE 1
 #define RIGHT_SIDE 2
-WINDOW* win;
+WINDOW *win, *point_win;
 char key[2]; 
 int game_result = ONGOING;
 int side;
+int left_point, right_point;
 
 pthread_mutex_t mutex =  PTHREAD_MUTEX_INITIALIZER;
 Paddle *left, *right;
@@ -69,13 +72,13 @@ int make_thread(void* (*fn)(void *), void* arg){
 
 void Snake(){
     system("clear");
-    printf("     _______  __    _  _______  ___   _  _______   \n");
-    printf("    |       ||  |  | ||   _   ||   | | ||       |  \n");
-    printf("    |  _____||   |_| ||  |_|  ||   |_| ||    ___|  \n");
-    printf("    | |_____ |       ||       ||      _||   |___   \n");
-    printf("    |_____  ||  _    ||       ||     |_ |    ___|  \n");
-    printf("     _____| || | |   ||   _   ||    _  ||   |___   \n");
-    printf("    |_______||_|  |__||__| |__||___| |_||_______|  \n");
+    printf("     _______  _______  _    __  _______   \n");
+    printf("    |   _   ||   _   || |_ |  ||  __   |  \n");
+    printf("    |  |_|  ||  | |  ||  |_|  || |  |__|  \n");
+    printf("    |  _____||  | |  ||       || |_____   \n");
+    printf("    | |      |  | |  ||  _    ||  __   |  \n");
+    printf("    | |      |  |_|  || | |_  || |__|  |  \n");
+    printf("    |_|      |_______||_|   |_||_______|  \n");
     printf("\n");
 }
 
@@ -314,12 +317,12 @@ void* write_to_server(void* arg){
 
 void* capture_key_press(void* arg) { // capture key press in 0.1s
     int sockfd = *(int*) arg;
-    char key_buf;
+    char key_buf, s;
     struct timespec ts;
     ts.tv_sec = REFRESH;
     ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 100000; // 0.1s
     
-    while(game_result == ONGOING) {
+    while(game_result == ONGOING || game_result == LEFT_PAUSE_GAME || game_result == RIGHT_PAUSE_GAME) {
         nanosleep(&ts, NULL);
         bzero(&key_buf, 1);
         timeout(REFRESH * 00);
@@ -327,22 +330,114 @@ void* capture_key_press(void* arg) { // capture key press in 0.1s
         if( (key_buf = wgetch(win)) != ERR ) {
             key_buf = toupper(key_buf);
             if(key_buf == '.'){
-                game_result = INTERRUPTED;
-                break;
-            } else if( (key_buf == UP_KEY) || (key_buf == DOWN_KEY) ) {
                 pthread_mutex_lock(&mutex);
-                key[0] = key_buf;
-                make_thread(write_to_server, &sockfd);
-                // update paddle
-                if( side == LEFT_SIDE && key[0] == UP_KEY) {
-                    displace(left, -2, HEIGHT);
-                } else if( side == LEFT_SIDE && key[0] == DOWN_KEY) {
-                    displace(left, 2, HEIGHT);
-                } else if( side == RIGHT_SIDE && key[0] == UP_KEY) {
-                    displace(right, -2, HEIGHT);
-                } else if( side == RIGHT_SIDE && key[0] == DOWN_KEY) {
-                    displace(right, 2, HEIGHT);
+                game_result = INTERRUPTED;
+                pthread_mutex_unlock(&mutex);
+                break;
+            } else if( key_buf == UP_KEY || key_buf == DOWN_KEY || key_buf == 'P' ) {
+                if( key_buf == 'P' ) { // change game status + notify to server
+                    if( game_result == ONGOING ){
+                        pthread_mutex_lock(&mutex);
+
+                        // change status
+                        game_result = (side == LEFT_SIDE)? LEFT_PAUSE_GAME : RIGHT_PAUSE_GAME;
+
+                        // send to server to turn on PAUSE mode
+                        bzero(&s, 1);
+                        s = (side == LEFT_SIDE)? 'L' : 'R';
+                        key[0] = s;
+                        make_thread(write_to_server, &sockfd);
+                        pthread_mutex_unlock(&mutex);
+                    } else if( game_result == LEFT_PAUSE_GAME && side == LEFT_SIDE){
+                        pthread_mutex_lock(&mutex);
+
+                        // change status
+                        game_result = ONGOING;
+
+                        // send to server to shutdown PAUSE mode
+                        key[0] = 'L';
+                        make_thread(write_to_server, &sockfd);
+                        pthread_mutex_unlock(&mutex);
+                    } else if( game_result == RIGHT_PAUSE_GAME && side == RIGHT_SIDE){
+                        pthread_mutex_lock(&mutex);
+
+                        // change status
+                        game_result = ONGOING;
+
+                        // send to server to shutdown PAUSE mode
+                        key[0] = 'R';
+                        make_thread(write_to_server, &sockfd);
+                        pthread_mutex_unlock(&mutex);
+                    }
+                } else {
+                    if( game_result == ONGOING ) {
+                        pthread_mutex_lock(&mutex);
+                        key[0] = key_buf;
+                        make_thread(write_to_server, &sockfd);
+                        // update paddle
+                        if( side == LEFT_SIDE && key[0] == UP_KEY) {
+                            displace(left, -2, HEIGHT);
+                        } else if( side == LEFT_SIDE && key[0] == DOWN_KEY) {
+                            displace(left, 2, HEIGHT);
+                        } else if( side == RIGHT_SIDE && key[0] == UP_KEY) {
+                            displace(right, -2, HEIGHT);
+                        } else if( side == RIGHT_SIDE && key[0] == DOWN_KEY) {
+                            displace(right, 2, HEIGHT);
+                        }
+                        // checking the conflict
+                        if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
+                            //conflict with paddle
+                            ball->plus_x = -1 * ball->plus_x;
+                        } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
+                            // conflict with window
+                            ball->plus_y = -1 * ball->plus_y;
+                        }
+                        pthread_mutex_unlock(&mutex);
+                    }
+                }  
+            }
+        }
+    }
+    return 0;
+}
+
+void* receive_rival_paddle(void* arg) { // every 0.1s
+    int sockfd = *(int*) arg;
+    char data[2];
+    
+    while(game_result == ONGOING || game_result == LEFT_PAUSE_GAME || game_result == RIGHT_PAUSE_GAME){
+        struct timespec ts;
+        ts.tv_sec = REFRESH;
+        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 100000; // 0.1s
+        nanosleep(&ts, NULL);
+        //Recieve updated rival paddle from server
+        int income_key;
+        income_key = read(sockfd, data, 1);
+        if(income_key <= 0) {
+            perror("acnbabc");
+        } else if( data[0] == 'L' ) {
+            pthread_mutex_lock(&mutex);
+            game_result = (game_result == ONGOING)? LEFT_PAUSE_GAME : ONGOING;
+            pthread_mutex_unlock(&mutex);
+        } else if( data[0] == 'R' ) {
+            pthread_mutex_lock(&mutex);
+            game_result = (game_result == ONGOING)? RIGHT_PAUSE_GAME : ONGOING;
+            pthread_mutex_unlock(&mutex);
+        } else if(data[0] == UP_KEY || data[0] == DOWN_KEY){
+            if( game_result == ONGOING ) {
+                pthread_mutex_lock(&mutex);
+                if( data[0] == UP_KEY ) {
+                    if( side == LEFT_SIDE) 
+                        displace(right, -2, HEIGHT);
+                    else if( side == RIGHT_SIDE) 
+                        displace(left, -2, HEIGHT);
+                } else if( data[0] == DOWN_KEY ) {
+                    if( side == LEFT_SIDE) 
+                        displace(right, 2, HEIGHT);
+                    else if( side == RIGHT_SIDE) 
+                        displace(left, 2, HEIGHT);
                 }
+
                 // checking the conflict
                 if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
                     //conflict with paddle
@@ -353,49 +448,6 @@ void* capture_key_press(void* arg) { // capture key press in 0.1s
                 }
                 pthread_mutex_unlock(&mutex);
             }
-
-        }
-    }
-    return 0;
-}
-
-void* receive_rival_paddle(void* arg) { // every 0.1s
-    int sockfd = *(int*) arg;
-    char data[2];
-    
-    while(game_result == ONGOING){
-        struct timespec ts;
-        ts.tv_sec = REFRESH;
-        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 100000; // 0.1s
-        nanosleep(&ts, NULL);
-        //Recieve updated rival paddle from server
-        int income_key;
-        income_key = read(sockfd, data, 1);
-        if(income_key <= 0)
-            perror("acnbabc");
-        else {
-            pthread_mutex_lock(&mutex);
-            if( data[0] == UP_KEY ) {
-                if( side == LEFT_SIDE) 
-                    displace(right, -2, HEIGHT);
-                else if( side == RIGHT_SIDE) 
-                    displace(left, -2, HEIGHT);
-            } else if( data[0] == DOWN_KEY ) {
-                if( side == LEFT_SIDE) 
-                    displace(right, 2, HEIGHT);
-                else if( side == RIGHT_SIDE) 
-                    displace(left, 2, HEIGHT);
-            }
-
-            // checking the conflict
-            if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
-                //conflict with paddle
-                ball->plus_x = -1 * ball->plus_x;
-            } else if( checkConflictWithWindow(ball, WIDTH, HEIGHT) ) {
-                // conflict with window
-                ball->plus_y = -1 * ball->plus_y;
-            }
-            pthread_mutex_unlock(&mutex);
         }
     }
     return 0;
@@ -403,7 +455,7 @@ void* receive_rival_paddle(void* arg) { // every 0.1s
 
 void* update_screen(void* arg){     // every 0.1s
 
-    while(game_result == ONGOING){
+    while(game_result == ONGOING || game_result == LEFT_PAUSE_GAME || game_result == RIGHT_PAUSE_GAME){
 
         struct timespec ts;
         ts.tv_sec = REFRESH;
@@ -411,6 +463,7 @@ void* update_screen(void* arg){     // every 0.1s
         nanosleep(&ts, NULL);
         
         /// Draw screen
+        pthread_mutex_lock(&mutex);
         wclear(win);
         box(win, '|', '-');
         for( int i = left->center->y - left->halfLength; i <= left->center->y + left->halfLength; i++) {
@@ -422,9 +475,12 @@ void* update_screen(void* arg){     // every 0.1s
         mvwaddch(win, ball->center->y, ball->center->x, 'O');
 
         wrefresh(win);
+        pthread_mutex_unlock(&mutex);
     }
     return 0;
 }
+
+
 
 int main(int argc, char *argv[]){
     int                 sockfd;
@@ -482,33 +538,18 @@ int main(int argc, char *argv[]){
 
     //Set window to new ncurses window
     win = newwin(HEIGHT, WIDTH, 0, 0);
-    //Snake colours
-    init_pair(0, COLOR_WHITE, COLOR_BLUE);
-    init_pair(1, COLOR_WHITE, COLOR_RED);
-    init_pair(2, COLOR_WHITE, COLOR_GREEN);
-    init_pair(3, COLOR_WHITE, COLOR_YELLOW);
-    init_pair(4, COLOR_WHITE, COLOR_MAGENTA);
-    init_pair(5, COLOR_WHITE, COLOR_CYAN);
-    init_pair(6, COLOR_BLACK, COLOR_YELLOW);
-    init_pair(7, COLOR_BLACK, COLOR_MAGENTA);
-    init_pair(8, COLOR_BLACK, COLOR_CYAN);
-    init_pair(9, COLOR_BLACK, COLOR_WHITE);
-
-    mvprintw((HEIGHT-20)/2 + 1, (WIDTH-58)/2,"     _______  __    _  _______  ___   _  _______   \n");
-    mvprintw((HEIGHT-20)/2 + 2, (WIDTH-58)/2,"    |       ||  |  | ||   _   ||   | | ||       |  \n");
-    mvprintw((HEIGHT-20)/2 + 3, (WIDTH-58)/2,"    |  _____||   |_| ||  |_|  ||   |_| ||    ___|  \n");
-    mvprintw((HEIGHT-20)/2 + 4, (WIDTH-58)/2,"    | |_____ |       ||       ||      _||   |___   \n");
-    mvprintw((HEIGHT-20)/2 + 5, (WIDTH-58)/2,"    |_____  ||  _    ||       ||     |_ |    ___|  \n");
-    mvprintw((HEIGHT-20)/2 + 6, (WIDTH-58)/2,"     _____| || | |   ||   _   ||    _  ||   |___   \n");
-    mvprintw((HEIGHT-20)/2 + 7, (WIDTH-58)/2,"    |_______||_|  |__||__| |__||___| |_||_______|  \n");
+    point_win = newwin(10, WIDTH, HEIGHT + 5, 0); // draw the point display
+    
+    wclear(win);
     mvprintw((HEIGHT-20)/2 + 10, (WIDTH-58)/2," Instructions:"); 
-    mvprintw((HEIGHT-20)/2 + 12, (WIDTH-58)/2," - Use the keys [W], [A], [S], [D] to move your snake.");
-    mvprintw((HEIGHT-20)/2 + 13, (WIDTH-58)/2," - Eat fruit to grow in length.");
-    mvprintw((HEIGHT-20)/2 + 14, (WIDTH-58)/2," - Do not run in to other snakes, the game border, the game wall"); 
-    mvprintw((HEIGHT-20)/2 + 15, (WIDTH-58)/2,"   or yourself.");
-    mvprintw((HEIGHT-20)/2 + 16, (WIDTH-58)/2," - The first snake to reach length 10 wins!");
+    mvprintw((HEIGHT-20)/2 + 12, (WIDTH-58)/2," - Use the keys [W], [S] to move your paddle.");
+    mvprintw((HEIGHT-20)/2 + 13, (WIDTH-58)/2," - If want to pause game, press [P].");
+    mvprintw((HEIGHT-20)/2 + 14, (WIDTH-58)/2," - Don't let ball hit your wall, rival"); 
+    mvprintw((HEIGHT-20)/2 + 15, (WIDTH-58)/2,"   will be added 1 point.");
+    mvprintw((HEIGHT-20)/2 + 16, (WIDTH-58)/2," - Hit the rival's wall, you'll be added 1 point");
     mvprintw((HEIGHT-20)/2 + 17, (WIDTH-58)/2," - Press '.' to quit at any time.");
-    mvprintw((HEIGHT-20)/2 + 19, (WIDTH-58)/2,"Press any key to start . . ."); 
+    mvprintw((HEIGHT-20)/2 + 19, (WIDTH-58)/2,"Let ress any key to start game. . ."); 
+    wrefresh(win);
     wgetch(win);
 
     // Init ball, paddle
@@ -516,17 +557,23 @@ int main(int argc, char *argv[]){
     right = setPaddle( WIDTH - 2, HEIGHT/2, 2); // right paddle
     ball = setBall( WIDTH/2, HEIGHT/2, 2, 2); // ball
 
+    // Init game point
+    left_point = 0; right_point = 0;
+
     //Start writing inputs to the server every REFRESH seconds and updating the screen
     make_thread(update_screen, &sockfd);
     make_thread(capture_key_press, &sockfd);
     make_thread(receive_rival_paddle, &sockfd);
+    //make_thread(update_point_screen, &sockfd);
 
-    while(game_result == ONGOING){ // every 0.4s
+    while(game_result == ONGOING || game_result == LEFT_PAUSE_GAME || game_result == RIGHT_PAUSE_GAME){ // every 0.6s
         struct timespec ts;
         ts.tv_sec = REFRESH;
-        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 400000; // 0.4s
+        ts.tv_nsec = ((int)(REFRESH * 1000) % 1000)  * 600000; // 0.6s
         nanosleep(&ts, NULL);
-        //Update ball
+        if(game_result == LEFT_PAUSE_GAME || game_result == RIGHT_PAUSE_GAME) {
+            continue;
+        }
         pthread_mutex_lock(&mutex);
         // checking the conflict
         if( checkConfilctWithLeftPaddle(ball, left) || checkConfilctWithRightPaddle(ball, right)) {
@@ -546,12 +593,21 @@ int main(int argc, char *argv[]){
             ball->center->x = WIDTH / 2;
             ball->center->y = HEIGHT / 2;
 
+            if( 1 > ball->center->x ) {
+                // add point to right paddle
+                right_point ++;
+            } else if( ball->center->x > WIDTH - 2 ){
+                // add point to left paddle
+                left_point ++;
+            }
+
         }
         updatePosition(ball);
         pthread_mutex_unlock(&mutex);
     }
 
     wclear(win);
+    wclear(point_win);
     echo(); 
     curs_set(1);  
     endwin();

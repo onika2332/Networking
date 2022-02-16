@@ -16,11 +16,10 @@
 
 
 #define DEFAULT_KEY         'N'
-#define PORT                5501
+#define PORT                5500
 #define MAX_PLAYERS         100
 #define HEIGHT              24
 #define WIDTH               80
-#define MAX_SNAKE_LENGTH    HEIGHT * WIDTH
 #define WINNER_LENGTH       10
 #define WALL                -1111
 #define WALL2               -1112
@@ -309,7 +308,7 @@ void* gameplay(void* arg){
             break;
         //If user key is a direction, then apply it
         key_buffer = toupper(key_buffer);   
-        if(  key_buffer == UP || key_buffer == DOWN ) { 
+        if(  key_buffer == UP || key_buffer == DOWN || key_buffer == 'L' || key_buffer == 'R') { 
             key[0] = key_buffer;
         }
         for(i = 0; i < 2; i++){
@@ -329,7 +328,7 @@ int main(){
     room = (char *)malloc(256*sizeof(char));
     int                socket_fds[MAX_PLAYERS];     
     struct sockaddr_in socket_addr[MAX_PLAYERS];
-    int                i;
+    int                i, left_point = 0, right_point = 0;
 
     //Handle Ctrl+C
     signal(SIGINT, ctrl_c_handler);
